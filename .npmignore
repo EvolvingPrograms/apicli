@@ -1,0 +1,15 @@
+src
+*.test.ts
+qa
+.github
+.husky
+.vscode
+.idea
+tsconfig.json
+tsconfig.build.json
+eslint.config.js
+bun.lock
+*.tsbuildinfo
+.eslintcache
+.cache
+coverage
