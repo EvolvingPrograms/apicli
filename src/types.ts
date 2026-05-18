@@ -9,6 +9,7 @@
  * uniformly.
  */
 
+import type { Command } from "commander"
 import type { z } from "zod"
 
 // ===========================================================================
@@ -87,13 +88,67 @@ export type AnyEndpointSpec
 
 export type EndpointMap = Record<string, AnyEndpointSpec>
 
-export interface ApiSpec<E extends EndpointMap = EndpointMap> {
+/**
+ * Declarative requirements an API needs at construction time.
+ * Validated by `defineApi` — if any required entry is missing,
+ * a clear error is thrown before the first request fires.
+ *
+ * Currently supports env vars; future-extensible to files /
+ * secrets / capabilities as the need surfaces.
+ */
+export interface ApiRequires<Env extends readonly string[] = readonly string[]> {
+  /**
+   * Env var names that must be present in `process.env` when
+   * the client is built. The headers / baseQuery callbacks get
+   * each one typed as `string` (not `string | undefined`).
+   */
+  env?: Env
+}
+
+/**
+ * Context handed to `headers` / `baseQuery` callbacks. `env`
+ * carries the env vars declared in `ApiSpec.requires.env`,
+ * already validated and pre-fetched. When `requires.env` isn't
+ * declared, `env` is an empty record.
+ */
+export interface ApiContext<Env extends readonly string[] = readonly string[]> {
+  env: Record<Env[number], string>
+}
+
+export interface ApiSpec<
+  E extends EndpointMap = EndpointMap,
+  Env extends readonly string[] = readonly string[],
+> {
   name: string
   baseUrl: string
+  /**
+   * Shorthand for "this API uses bearer-token auth from this env
+   * var". Equivalent to:
+   *
+   *   - adding the var name to `requires.env`
+   *   - prepending `Authorization: Bearer ${env[name]}` to every
+   *     request's headers
+   *
+   * User-supplied `headers` still win — if you return your own
+   * `Authorization` from the `headers` callback, it overrides
+   * the auto-injected one. Use that escape hatch for non-Bearer
+   * schemes (HMAC, OAuth refresh, etc.).
+   */
+  auth?: string
+  /** Declared construction-time requirements (env vars, ...). */
+  requires?: ApiRequires<Env>
+  /**
+   * Override the env source. By default `defineApi` reads from
+   * `process.env`; pass a record here to substitute (useful for
+   * tests, in-process multi-tenant setups, etc.). Required vars
+   * declared in `requires.env` are still validated against this
+   * source.
+   */
+  env?: Record<string, string>
   /** Headers attached to every request. Async ok (for crumb dances, etc.). */
-  headers?: () => Record<string, string> | Promise<Record<string, string>>
+  headers?: (ctx: ApiContext<Env>) => Record<string, string> | Promise<Record<string, string>>
   /** Query params merged onto every request (api_key, file_type, ...). */
-  baseQuery?: () => Record<string, string> | Promise<Record<string, string>>
+  baseQuery?: (ctx: ApiContext<Env>) => Record<string, string> | Promise<Record<string, string>>
   endpoints: E
 }
 
@@ -185,7 +240,7 @@ export interface CreateCliOptions {
 
 export interface Cli {
   /** Raw commander program — escape hatch for plugin-specific tweaks. */
-  program: import("commander").Command
+  program: Command
   /** Call after all setup. Parses argv and dispatches. */
   run(): Promise<void>
 }

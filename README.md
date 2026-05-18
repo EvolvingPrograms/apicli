@@ -1,159 +1,392 @@
 # apicli
 
-Schema-driven API client + auto-generated CLI. Define your API
-once with zod schemas — get a typed HTTP client, a generic
-`api <endpoint> --flag value` CLI, and ergonomic `defineCommand`
-wrappers for free.
-
-```
-┌─ schema (zod) ─────────┐      ┌─ typed client ─────────┐
-│  ENDPOINTS = {         │  →   │  api.chart({…})        │
-│    chart: get(…),      │      │  // typed return       │
-│    quoteSummary: dependent(…),│      ╰────────────────────────╯
-│  } as const            │      ┌─ generic CLI ──────────┐
-╰────────────────────────╯  →   │  api chart --…         │
-                                ╰────────────────────────╯
-
-┌─ defineCommand(schema, handler) ─┐     ┌─ createCli({api, commands}) ──┐
-│  typed "API function"             │ →   │  commander program            │
-│  + variance-neutral storage view  │     │  + JSON-on-stdout             │
-│  + callable + composable          │     │  + error → stderr + exit 1    │
-╰───────────────────────────────────╯     ╰───────────────────────────────╯
-```
-
-## Install
+Encode any HTTP API as a zod schema, get a typed client + a
+working CLI back. Every endpoint in your schema is reachable from
+the command line as `api <endpoint> --flag value` — no manual
+argv parsing, no flag definitions, no JSON-arg gymnastics.
 
 ```bash
 bun add apicli
 ```
 
-`apicli` ships as **pure TypeScript** (no build step, no
-transpilation). Designed for [Bun](https://bun.sh) — published
-`.ts` source resolves natively and runs with full type checking.
+Pure TypeScript, no build step. Designed for [Bun](https://bun.sh).
+Runs on Node ≥ 22 with `--experimental-strip-types`. Depends on
+`zod` and `commander` (pulled in transitively).
 
-Depends on `zod` and `commander`.
+---
 
-## Runtime
+## Hello, API
 
-- **Bun** — first-class. `bun add apicli` and import.
-- **Node ≥ 22** — works with `--experimental-strip-types`, or
-  via a TS loader (`tsx`, `ts-node`). Not the primary target.
-
-If you need a built JS/CJS version, fork and add a `tsc` build
-step — the source is plain ES modules with no Bun-specific APIs
-in the runtime path (tests use `bun:test` + `Bun.serve`).
-
-## Quick start
+Define a schema. That's the whole thing:
 
 ```ts
+// my-cli.ts
 import { z } from "zod"
-import { createCli, defineApi, defineCommand, get } from "apicli"
+import { createCli, defineApi, get } from "apicli"
 
-// 1. Schema — single source of truth (types + runtime + flags)
-const myApi = defineApi({
-  name: "my-api",
-  baseUrl: "https://example.test",
+const github = defineApi({
+  name: "github",
+  baseUrl: "https://api.github.com",
   endpoints: {
-    foo: get(
-      "/v1/foo/{id}",
-      z.object({
-        id: z.string(),
-        verbose: z.boolean().optional(),
+    user: get("/users/{username}", z.object({
+      username: z.string(),
+    })),
+    search: get("/search/repositories", z.object({
+      q: z.string(),
+      sort: z.enum(["stars", "forks", "updated"]).optional(),
+      per_page: z.coerce.number().int().default(30),
+    })),
+  },
+})
+
+const program = createCli({
+  name: "gh",
+  description: "Tiny GitHub CLI",
+  api: github,
+})
+
+program.run()
+```
+
+Run it:
+
+```bash
+$ bun my-cli.ts api user --username torvalds
+{"login":"torvalds","id":1024025,...}
+
+$ bun my-cli.ts api search --q "language:rust stars:>50000" --sort stars --per-page 5
+{"total_count":...,"items":[...]}
+
+$ bun my-cli.ts api search --help
+Usage: gh api search [options]
+
+Options:
+  --q <v>
+  --sort <stars|forks|updated>
+  --per-page <n>
+```
+
+Every endpoint becomes an `api <name>` subcommand. Every zod
+schema key becomes a `--flag`. `--help` is generated automatically
+from the schema. The response comes back as JSON on stdout.
+
+That's the minimum useful thing — schema in, CLI out.
+
+---
+
+## You also get a typed client
+
+The same schema gives you a programmatic client:
+
+```ts
+const user = await github.user({ username: "torvalds" })
+//    ^^^^ Promise<unknown>   ← no response schema, you cast or narrow
+```
+
+Attach a `response` schema and the return type becomes the
+inferred shape, with runtime validation:
+
+```ts
+endpoints: {
+  user: get(
+    "/users/{username}",
+    z.object({ username: z.string() }),
+    {
+      response: z.object({
+        login:    z.string(),
+        id:       z.number(),
+        html_url: z.string(),
       }),
-      { response: z.object({ id: z.string(), name: z.string() }) },
+    },
+  ),
+}
+
+const user = await github.user({ username: "torvalds" })
+//    ^^^^ { login: string, id: number, html_url: string }
+user.login            // ✓
+user.notAField        // ✗ type error
+```
+
+Only schematize the fields you actually use — extra fields in the
+response are ignored at runtime.
+
+---
+
+## Custom commands on top
+
+The generic `api <endpoint>` surface hits the endpoint exactly as
+specified. Most of the time you want something more ergonomic —
+defaults, positional args, post-processing, multiple calls
+composed together. That's what `defineCommand` is for.
+
+```ts
+import { defineCommand } from "apicli"
+
+const lookup = defineCommand({
+  name: "lookup",
+  description: "Look up a user by login",
+  schema: z.object({ username: z.string() }),
+  positional: ["username"],         // → `gh lookup torvalds` (not `--username`)
+  handler: async ({ username }) => {
+    const user = await github.user({ username })
+    return { login: user.login, url: user.html_url }
+  },
+})
+
+const program = createCli({
+  name: "gh",
+  description: "Tiny GitHub CLI",
+  api: github,
+  commands: [lookup],
+})
+
+program.run()
+```
+
+```bash
+$ bun my-cli.ts lookup torvalds
+{"login":"torvalds","url":"https://github.com/torvalds"}
+```
+
+The CLI now exposes **both** surfaces — `gh lookup <username>`
+for the common path and `gh api user --username <name>` for raw
+access.
+
+Each `defineCommand` is also callable as a function:
+
+```ts
+import { lookup } from "./commands/lookup"
+
+const { login } = await lookup({ username: "torvalds" })
+```
+
+Typed args, runtime validation, return type inferred from the
+handler.
+
+---
+
+## Auth (one line)
+
+Most APIs use a bearer token from an env var. `auth: "ENV_NAME"`
+is the shortcut — same effect as writing
+`Authorization: Bearer ${env.ENV_NAME}` in a `headers` callback,
+without any of the boilerplate:
+
+```ts
+const github = defineApi({
+  name: "github",
+  baseUrl: "https://api.github.com",
+  auth: "GITHUB_TOKEN",     // ← that's it
+  endpoints: { ... },
+})
+```
+
+`defineApi` reads `GITHUB_TOKEN` lazily — on each request, not at
+construction — so you can `import` your CLI module before the env
+is set. Run it:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) bun my-cli.ts api user --username torvalds
+```
+
+In GitHub Actions, `secrets.GITHUB_TOKEN` is auto-provisioned —
+pass it through in your workflow:
+
+```yaml
+- run: bun my-cli.ts api user --username torvalds
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+If the env var isn't set when a request fires, you get a clear
+error: `github: required env var GITHUB_TOKEN is not set`.
+
+For non-Bearer auth or multiple env vars, use `requires.env` +
+`headers`:
+
+```ts
+defineApi({
+  name: "myapi",
+  baseUrl: "https://example.test",
+  requires: { env: ["MYAPI_KEY", "MYAPI_SECRET"] },
+  headers: ({ env }) => ({
+    "X-API-Key":    env.MYAPI_KEY,     // typed as `string`
+    "X-API-Secret": env.MYAPI_SECRET,  // not `string | undefined`
+  }),
+  endpoints: { ... },
+})
+```
+
+The `headers` and `baseQuery` callbacks both receive `ctx.env`
+typed against your declared `requires.env` tuple (no `as const`
+needed).
+
+`baseQuery` is merged into the query string on every call —
+useful for APIs that want their key as a query param instead of
+a header:
+
+```ts
+defineApi({
+  name: "fred",
+  baseUrl: "https://api.stlouisfed.org/fred",
+  requires: { env: ["FRED_API_KEY"] },
+  baseQuery: ({ env }) => ({
+    api_key:   env.FRED_API_KEY,
+    file_type: "json",
+  }),
+  endpoints: { ... },
+})
+```
+
+---
+
+## Dependent endpoints
+
+Some APIs let you request specific slices of a response — Yahoo
+Finance's `quoteSummary?modules=summaryDetail,financialData`,
+GraphQL-ish field selectors, etc. The response shape depends on
+what you asked for.
+
+`dependent()` makes that typed:
+
+```ts
+import { dependent } from "apicli"
+
+const yahoo = defineApi({
+  name: "yahoo",
+  baseUrl: "https://query1.finance.yahoo.com",
+  endpoints: {
+    summary: dependent(
+      "/v10/finance/quoteSummary/{symbol}",
+      z.object({ symbol: z.string() }),
+      "modules",
+      {
+        summaryDetail: z.object({ marketCap: z.number().optional() }),
+        financialData: z.object({ totalCash:  z.number().optional() }),
+        earningsHistory: z.object({
+          history: z.array(z.object({ epsActual: z.number().optional() })),
+        }),
+      },
     ),
   },
 })
 
-// 2. Typed client method works in-process
-const result = await myApi.foo({ id: "abc" })
-//    ^^^ { id: string, name: string } — inferred from `response`
-
-// 3. Friendly command wraps the API for ergonomic CLI use
-const fetchFoo = defineCommand({
-  name: "fetch",
-  schema: z.object({ id: z.string() }),
-  positional: ["id"],
-  handler: ({ id }) => myApi.foo({ id }),
+const s = await yahoo.summary({
+  symbol: "AAPL",
+  modules: ["summaryDetail", "financialData"],
 })
 
-// 4. createCli wires the lot into a commander program
-const cli = createCli({
-  name: "my-cli",
-  description: "Demo CLI",
-  api: myApi,             // → adds `api <endpoint> --flag value` for free
-  commands: [fetchFoo],   // → adds `fetch <id>` ergonomic surface
-})
-
-await cli.run()
+s.summaryDetail.marketCap      // ✓
+s.financialData.totalCash      // ✓
+s.earningsHistory              // ✗ type error — not requested
 ```
 
-Now the user can do either:
+The literal tuple at `modules` flows through to the return type
+via a `const` type parameter — no `as const` needed at the call
+site. Runtime validation only runs the schemas for modules you
+asked for.
 
-```bash
-my-cli fetch abc                       # ergonomic friendly command
-my-cli api foo --id abc --verbose      # generic API surface
-```
+`bun ... api summary --symbol AAPL --modules summaryDetail,financialData`
+works too — the CLI side accepts a comma-separated list.
 
-Both call `myApi.foo({...})` under the hood — same validation,
-same response parsing, same error mapping.
+---
 
-## Three endpoint shapes
+## Errors
+
+Throw an instance of your own `errorClass` from a handler and it
+maps to `<cli-name>: <message>` on stderr with exit code 1:
 
 ```ts
-// 1. Static endpoint
-foo: get("/v1/foo", z.object({ x: z.string() })),
+class GithubError extends Error {
+  override readonly name = "GithubError"
+}
 
-// 2. Static endpoint with typed response
-foo: get(
-  "/v1/foo",
-  z.object({ x: z.string() }),
-  { response: z.object({ ok: z.boolean() }) },
-),
-
-// 3. Dependent endpoint — return type depends on a "select" arg
-summary: dependent(
-  "/v1/summary/{id}",
-  z.object({ id: z.string() }),
-  "modules",
-  {
-    detail: z.object({ score: z.number() }),
-    financials: z.object({ revenue: z.number() }),
+const lookup = defineCommand({
+  name: "lookup",
+  schema: z.object({ username: z.string() }),
+  handler: async ({ username }) => {
+    if (username.length < 1) throw new GithubError("empty username")
+    return github.user({ username })
   },
-)
-// Then:
-api.summary({ id: "x", modules: ["detail"] })
-//    → Promise<{ detail: { score: number } }>   ← inferred from the tuple
+})
+
+const program = createCli({
+  name: "gh",
+  description: "...",
+  api: github,
+  commands: [lookup],
+  errorClass: GithubError,
+})
+
+program.run()
 ```
 
-The dependent variant uses a `const` type parameter + a mapped
-type discriminated by `__dependent: true`, so the literal tuple
-flows into the return type without an `as const` at the call site.
+Other thrown errors (including `ZodError` from input validation
+and the env-not-set error from `auth`/`requires.env`) get
+pretty-printed under the same prefix.
 
-## Strict typing
+---
 
-- No `any` anywhere in the public surface.
-- Variance handled with `StoredApi` / `StoredCommand` views that use
-  `unknown` in input positions — specific typed clients assign in
-  via property covariance.
-- Response shapes are opt-in. Leave `response` off the endpoint
-  spec for `unknown`; provide a `z.object({...})` for full runtime
-  validation.
+## POST endpoints
+
+`post(path, params, opts?)` is identical to `get` apart from the
+HTTP method. Body construction from params is on the roadmap —
+for now use `headers` + a custom serializer if you need it.
+
+---
+
+## Examples
+
+Runnable, self-contained demos. Each is a single file using
+flat top-level `const` exports — copy and adapt.
+
+- **[`examples/github.ts`](./examples/github.ts)** — the
+  canonical real-world example. Bearer auth via `auth:
+  "GITHUB_TOKEN"`, response schemas, two friendly commands
+  (`lookup`, `top`), and a `if (import.meta.main)` block so you
+  can run it as a script: `GITHUB_TOKEN=$(gh auth token) bun
+  examples/github.ts top "language:typescript stars:>10000"`.
+- **[`examples/echo.ts`](./examples/echo.ts)** — exercises
+  every endpoint shape (static GET, path placeholders,
+  intentional 5xx, dependent endpoint), three command shapes
+  (positional, dependent dispatch, intentional throw), and a
+  custom `errorClass`. Used as the integration-test fixture.
+- **[`examples/kebab.ts`](./examples/kebab.ts)** — proves the
+  walker converts camelCase schema keys to kebab-case
+  `--flag-name` CLI options.
+
+---
+
+## What this isn't
+
+- **A code generator.** Schemas are runtime values, not files
+  generated from OpenAPI. If you want OpenAPI ingestion, write
+  a converter that emits `defineApi(...)` source.
+- **A way to skip writing the schema.** apicli buys you the CLI
+  + typed client; you still describe each endpoint.
+- **A fetch wrapper.** It uses a small built-in fetcher
+  (timeout + optional retry) but offers no caching, no
+  request/response middleware, no streaming. Keep your fetch
+  layer simple and put cross-cutting concerns elsewhere.
+
+---
 
 ## Layout
 
+- `src/api/` — `defineApi`, `get`, `post`, `dependent`,
+  `callEndpoint`, `addApiCli` (the auto-CLI walker).
+- `src/cli/` — `defineCommand`, `createCli`, zod-schema →
+  commander flag walker, error mapping.
+- `src/http.ts` — internal polite-fetch (timeout + retry).
 - `src/types.ts` — all shared types.
-- `src/api/` — `defineApi`, `get`, `post`, `dependent`, `callEndpoint`,
-  `addApiCli` (auto-generated CLI surface).
-- `src/cli/` — `defineCommand`, `createCli`, `walkSchemaToCommander`
-  (zod schema → commander flag walker), error mapping.
-- `src/http.ts` — internal polite-fetch wrapper (timeout + retry).
-- `src/qa/integration.test.ts` — end-to-end pipeline against a
-  Bun.serve mock.
+- `examples/` — runnable demos linked above.
+- `qa/integration.test.ts` — full pipeline against `Bun.serve`.
+- `qa/github.live.test.ts` — live GitHub API test gated on
+  `GITHUB_TOKEN` / `gh auth token`.
 
 ## Status
 
-v0.1 — pre-release. API may change.
+v0.1 — pre-release. API may change. Use a pinned version.
 
 ## License
 

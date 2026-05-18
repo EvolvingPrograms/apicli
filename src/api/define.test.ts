@@ -58,6 +58,61 @@ describe("defineApi — construction", () => {
   })
 })
 
+describe("defineApi — env + auth validation (lazy)", () => {
+  test("defineApi itself does NOT throw when env is missing — only at call time", () => {
+    // Construction succeeds; the env requirement is resolved
+    // when the request fires.
+    expect(() =>
+      defineApi({
+        name: "x",
+        baseUrl: "https://example.test",
+        requires: { env: ["MISSING_THING"] },
+        env: { /* missing */ },
+        endpoints: { a: get("/a", z.object({})) },
+      }),
+    ).not.toThrow()
+  })
+
+  test("missing required env throws at call time", async () => {
+    const api = defineApi({
+      name: "x",
+      baseUrl: "https://example.test",
+      requires: { env: ["MISSING_THING"] },
+      env: { /* missing */ },
+      endpoints: { a: get("/a", z.object({})) },
+    })
+    await expect(api.a({})).rejects.toThrow(
+      /required env var MISSING_THING is not set/,
+    )
+  })
+
+  test("empty-string required env throws at call time", async () => {
+    const api = defineApi({
+      name: "x",
+      baseUrl: "https://example.test",
+      requires: { env: ["EMPTY_THING"] },
+      env: { EMPTY_THING: "" },
+      endpoints: { a: get("/a", z.object({})) },
+    })
+    await expect(api.a({})).rejects.toThrow(
+      /required env var EMPTY_THING is not set/,
+    )
+  })
+
+  test("`auth: \"X\"` implicitly adds X to required env — throws at call time when missing", async () => {
+    const api = defineApi({
+      name: "x",
+      baseUrl: "https://example.test",
+      auth: "MY_TOKEN",
+      env: { /* MY_TOKEN absent */ },
+      endpoints: { a: get("/a", z.object({})) },
+    })
+    await expect(api.a({})).rejects.toThrow(
+      /required env var MY_TOKEN is not set/,
+    )
+  })
+})
+
 describe("defineApi — dependent endpoint runtime", () => {
   test("rejects unknown select keys at call time", async () => {
     const api = defineApi({

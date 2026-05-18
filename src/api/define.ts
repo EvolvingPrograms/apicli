@@ -6,6 +6,12 @@
  *   │   chart: get(…), │    │ // typed return │
  *   │ } as const       │    ╰─────────────────╯
  *   ╰──────────────────╯
+ *
+ * Validates schema-side things eagerly (path placeholders match
+ * schema keys). Env / auth requirements (`requires.env`, `auth`)
+ * are resolved **lazily** at request time — they read
+ * `process.env` (or `spec.env` override) each call, so
+ * `defineApi` succeeds even before any env vars are exported.
  */
 
 import type { z } from "zod"
@@ -18,12 +24,22 @@ import type {
 import { extractPlaceholders } from "./path"
 import { callDependent, callEndpoint, isDependentEndpoint } from "./call"
 
-export function defineApi<const E extends EndpointMap>(
-  spec: ApiSpec<E>,
+/**
+ * `<const Env extends readonly string[]>` makes the `requires.env`
+ * tuple infer as a literal — so `requires: { env: ["GITHUB_TOKEN"] }`
+ * narrows `ctx.env` to `{ GITHUB_TOKEN: string }` without
+ * needing `as const` at the call site.
+ */
+export function defineApi<
+  const E extends EndpointMap,
+  const Env extends readonly string[] = readonly [],
+>(
+  spec: ApiSpec<E, Env>,
 ): ApiClient<E> {
   // Validate each endpoint's path placeholders against its
   // schema keys at definition time — catches typos before the
-  // first request.
+  // first request. Env validation is intentionally deferred to
+  // the call site (see `call.ts → resolveCtx`).
   for (const [name, endpoint] of Object.entries(spec.endpoints)) {
     const shape = paramsShape(endpoint)
     for (const placeholder of extractPlaceholders(endpoint.path)) {
@@ -40,9 +56,10 @@ export function defineApi<const E extends EndpointMap>(
   for (const [name, endpoint] of Object.entries(spec.endpoints)) {
     if (isDependentEndpoint(endpoint)) {
       client[name] = async (args: unknown) =>
-        callDependent(spec, endpoint, args)
+        callDependent(spec as ApiSpec, endpoint, args)
     } else {
-      client[name] = async (args: unknown) => callEndpoint(spec, endpoint, args)
+      client[name] = async (args: unknown) =>
+        callEndpoint(spec as ApiSpec, endpoint, args)
     }
   }
 
