@@ -1,4 +1,4 @@
-# apicli
+# clipi
 
 Encode any HTTP API as a zod schema, get a typed client + a
 working CLI back. Every endpoint in your schema is reachable from
@@ -6,7 +6,7 @@ the command line as `api <endpoint> --flag value` — no manual
 argv parsing, no flag definitions, no JSON-arg gymnastics.
 
 ```bash
-bun add apicli
+bun add clipi
 ```
 
 Pure TypeScript, no build step. Designed for [Bun](https://bun.sh).
@@ -22,7 +22,7 @@ Define a schema. That's the whole thing:
 ```ts
 // my-cli.ts
 import { z } from "zod"
-import { createCli, defineApi, get } from "apicli"
+import { createCli, defineApi, get } from "clipi"
 
 const github = defineApi({
   name: "github",
@@ -120,7 +120,7 @@ defaults, positional args, post-processing, multiple calls
 composed together. That's what `defineCommand` is for.
 
 ```ts
-import { defineCommand } from "apicli"
+import { defineCommand } from "clipi"
 
 const lookup = defineCommand({
   name: "lookup",
@@ -250,7 +250,7 @@ what you asked for.
 `dependent()` makes that typed:
 
 ```ts
-import { dependent } from "apicli"
+import { dependent } from "clipi"
 
 const yahoo = defineApi({
   name: "yahoo",
@@ -362,7 +362,7 @@ flat top-level `const` exports — copy and adapt.
 - **A code generator.** Schemas are runtime values, not files
   generated from OpenAPI. If you want OpenAPI ingestion, write
   a converter that emits `defineApi(...)` source.
-- **A way to skip writing the schema.** apicli buys you the CLI
+- **A way to skip writing the schema.** clipi buys you the CLI
   + typed client; you still describe each endpoint.
 - **A fetch wrapper.** It uses a small built-in fetcher
   (timeout + optional retry) but offers no caching, no

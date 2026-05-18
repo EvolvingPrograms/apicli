@@ -24,7 +24,7 @@ export interface PoliteFetchOptions {
   accept?: string
   /** Extra headers; merged on top of `User-Agent` + `Accept`. */
   headers?: Record<string, string>
-  /** Forced User-Agent. Default `apicli/<version>`. */
+  /** Forced User-Agent. Default `clipi/<version>`. */
   userAgent?: string
   /** Retry up to N times on 5xx with exponential backoff. Default 0. */
   retries?: number
@@ -34,7 +34,7 @@ export interface PoliteFetchOptions {
   redirect?: "follow" | "error" | "manual"
 }
 
-const DEFAULT_USER_AGENT = "apicli/0.1"
+const DEFAULT_USER_AGENT = "clipi/0.1"
 
 export async function politeFetch(
   url: string | URL | Request,

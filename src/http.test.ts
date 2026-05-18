@@ -10,7 +10,7 @@ describe("politeFetch — headers", () => {
         return new Response("ok")
       },
     })
-    expect(captured.get("User-Agent")).toMatch(/^apicli\//)
+    expect(captured.get("User-Agent")).toMatch(/^clipi\//)
     expect(captured.get("Accept")).toBe("*/*")
   })
 
@@ -48,7 +48,7 @@ describe("politeFetch — headers", () => {
       },
     })
     expect(captured.get("X-Custom")).toBe("yes")
-    expect(captured.get("User-Agent")).toMatch(/^apicli\//)
+    expect(captured.get("User-Agent")).toMatch(/^clipi\//)
   })
 })
 

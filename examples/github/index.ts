@@ -16,7 +16,7 @@ export * from "./commands"
 
 export const githubCli = createCli({
   name: "gh-tiny",
-  description: "Tiny GitHub CLI built with apicli",
+  description: "Tiny GitHub CLI built with clipi",
   api: githubApi,
   commands: [lookup, top],
   errorClass: GithubError,

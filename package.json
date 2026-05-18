@@ -1,5 +1,5 @@
 {
-  "name": "apicli",
+  "name": "clipi",
   "version": "0.1.0",
   "description": "Schema-driven API client + auto-generated CLI. One zod schema → typed client + generic `api <endpoint>` subcommand + ergonomic `defineCommand` wrappers.",
   "type": "module",
@@ -47,7 +47,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EvolvingPrograms/apicli.git"
+    "url": "git+https://github.com/EvolvingPrograms/clipi.git"
   },
   "engines": {
     "node": ">=22"
