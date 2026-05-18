@@ -337,21 +337,22 @@ for now use `headers` + a custom serializer if you need it.
 
 ## Examples
 
-Runnable, self-contained demos. Each is a single file using
-flat top-level `const` exports — copy and adapt.
+Runnable, self-contained demos. Each lives in its own folder
+(`index.ts` + `schema.ts` + `commands/`) using flat top-level
+`const` exports — copy and adapt.
 
-- **[`examples/github.ts`](./examples/github.ts)** — the
-  canonical real-world example. Bearer auth via `auth:
-  "GITHUB_TOKEN"`, response schemas, two friendly commands
-  (`lookup`, `top`), and a `if (import.meta.main)` block so you
-  can run it as a script: `GITHUB_TOKEN=$(gh auth token) bun
-  examples/github.ts top "language:typescript stars:>10000"`.
-- **[`examples/echo.ts`](./examples/echo.ts)** — exercises
-  every endpoint shape (static GET, path placeholders,
-  intentional 5xx, dependent endpoint), three command shapes
-  (positional, dependent dispatch, intentional throw), and a
-  custom `errorClass`. Used as the integration-test fixture.
-- **[`examples/kebab.ts`](./examples/kebab.ts)** — proves the
+- **[`examples/github/`](./examples/github/)** — the canonical
+  real-world example. Bearer auth via `auth: "GITHUB_TOKEN"`,
+  response schemas, two friendly commands (`lookup`, `top`),
+  and an `if (import.meta.main)` block so you can run it as a
+  script: `GITHUB_TOKEN=$(gh auth token) bun examples/github/
+  top "language:typescript stars:>10000"`.
+- **[`examples/echo/`](./examples/echo/)** — exercises every
+  endpoint shape (static GET, path placeholders, intentional
+  5xx, dependent endpoint), three command shapes (positional,
+  dependent dispatch, intentional throw), and a custom
+  `errorClass`. Used as the integration-test fixture.
+- **[`examples/kebab/`](./examples/kebab/)** — proves the
   walker converts camelCase schema keys to kebab-case
   `--flag-name` CLI options.
 

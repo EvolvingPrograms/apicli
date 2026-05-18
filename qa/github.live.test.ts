@@ -80,11 +80,13 @@ describe("github live", () => {
   )
 
   test.if(!!token)(
-    "authenticated rate_limit reports the 5000/hour bucket",
+    "authenticated rate_limit reports a bucket well above the anonymous 60/hour",
     async () => {
       const rl = await githubApi.rateLimit({})
-      expect(rl.resources.core.limit).toBe(5000)
-      expect(rl.resources.core.remaining).toBeLessThanOrEqual(5000)
+      // GITHUB_TOKEN on Actions reports 15000; a classic PAT reports 5000.
+      // We just need to assert "authenticated, not anonymous".
+      expect(rl.resources.core.limit).toBeGreaterThanOrEqual(1000)
+      expect(rl.resources.core.remaining).toBeLessThanOrEqual(rl.resources.core.limit)
     },
     { timeout: 30_000 },
   )
