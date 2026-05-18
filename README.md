@@ -6,7 +6,7 @@ the command line as `api <endpoint> --flag value` — no manual
 argv parsing, no flag definitions, no JSON-arg gymnastics.
 
 ```bash
-bun add clipi
+bun add @evolvingprograms/clipi
 ```
 
 Pure TypeScript, no build step. Designed for [Bun](https://bun.sh).
@@ -22,7 +22,7 @@ Define a schema. That's the whole thing:
 ```ts
 // my-cli.ts
 import { z } from "zod"
-import { createCli, defineApi, get } from "clipi"
+import { createCli, defineApi, get } from "@evolvingprograms/clipi"
 
 const github = defineApi({
   name: "github",
@@ -120,7 +120,7 @@ defaults, positional args, post-processing, multiple calls
 composed together. That's what `defineCommand` is for.
 
 ```ts
-import { defineCommand } from "clipi"
+import { defineCommand } from "@evolvingprograms/clipi"
 
 const lookup = defineCommand({
   name: "lookup",
@@ -250,7 +250,7 @@ what you asked for.
 `dependent()` makes that typed:
 
 ```ts
-import { dependent } from "clipi"
+import { dependent } from "@evolvingprograms/clipi"
 
 const yahoo = defineApi({
   name: "yahoo",
