@@ -97,11 +97,27 @@ describe("prettyFormat", () => {
     expect(prettyFormat(42)).toBe("42\n")
   })
 
-  test("array of non-flat objects → util.inspect fallback", () => {
-    const out = prettyFormat([{ nested: { deep: 1 } }])
+  test("array of objects with nested fields → renders as table with compact placeholders", () => {
+    const out = prettyFormat([
+      { id: "a", schedules: [{ cron: "0 7 * * 1" }] },
+      { id: "b", schedules: [] },
+    ])
+
+    // Still a table, not util.inspect.
+    expect(out).toMatch(/^┌/)
+    expect(out).toContain("id")
+    expect(out).toContain("schedules")
+    // Nested array represented compactly.
+    expect(out).toContain("[1 items]")
+    expect(out).toContain("[0 items]")
+  })
+
+  test("array of non-objects/non-scalars (e.g. nested arrays) → util.inspect fallback", () => {
+    const out = prettyFormat([[1, 2], [3, 4]])
+    // No top-level table — these aren't tabular.
     expect(out).not.toMatch(/^┌/)
-    expect(out).toContain("nested")
-    expect(out).toContain("deep")
+    expect(out).toContain("1")
+    expect(out).toContain("4")
   })
 
   // --- string normalisation ---

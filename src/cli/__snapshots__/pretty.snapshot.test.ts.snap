@@ -128,9 +128,33 @@ items:
 `;
 
 exports[`prettyPrint — rendered snapshots array of non-flat objects (util.inspect fallback) 1`] = `
-"[
-  { nested: { deep: 1, deeper: { x: 42 } } }
-]
+"┌───┬──────────────────┐
+│   │ \x1B[1mnested\x1B[0m           │
+├───┼──────────────────┤
+│ \x1B[1m0\x1B[0m │ { deep, deeper } │
+└───┴──────────────────┘
+"
+`;
+
+exports[`prettyPrint — rendered snapshots briefing list (mixed-shape array, nested arrays as compact placeholders) 1`] = `
+"items:
+┌───┬────────────────────────┬────────────────┬────────┬─────────────────────────┬─────────────────────────┬───────────┐
+│   │ \x1B[1mid\x1B[0m                     │ \x1B[1mname\x1B[0m           │ \x1B[1mstatus\x1B[0m │ \x1B[1mdescription\x1B[0m             │ \x1B[1mtopic\x1B[0m                   │ \x1B[1mschedules\x1B[0m │
+├───┼────────────────────────┼────────────────┼────────┼─────────────────────────┼─────────────────────────┼───────────┤
+│ \x1B[1m0\x1B[0m │ 6113f4d0-6b19-4168-9f… │ Regime Signals │ active │ Weekly statistical rea… │ # Market Regime & Outl… │ [2 items] │
+│ \x1B[1m1\x1B[0m │ a1b2c3d4-...           │ Daily Macro    │ paused │ Single short brief at…  │ Closing-price macro br… │ [0 items] │
+└───┴────────────────────────┴────────────────┴────────┴─────────────────────────┴─────────────────────────┴───────────┘
+
+"
+`;
+
+exports[`prettyPrint — rendered snapshots array of objects with one nested field (the listBriefingsCmd raw shape) 1`] = `
+"┌───┬────┬───────┬────────┬───────────┐
+│   │ \x1B[1mid\x1B[0m │ \x1B[1mname\x1B[0m  │ \x1B[1mstatus\x1B[0m │ \x1B[1mschedules\x1B[0m │
+├───┼────┼───────┼────────┼───────────┤
+│ \x1B[1m0\x1B[0m │ a  │ Alpha │ active │ [1 items] │
+│ \x1B[1m1\x1B[0m │ b  │ Beta  │ draft  │ [0 items] │
+└───┴────┴───────┴────────┴───────────┘
 "
 `;
 

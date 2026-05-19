@@ -49,8 +49,16 @@ function isFlatObject(v: unknown): v is Record<string, unknown> {
   return isPlainObject(v) && Object.values(v).every(isScalar)
 }
 
-function isFlatArray(v: unknown[]): boolean {
-  return v.every((item) => isScalar(item) || isFlatObject(item))
+/**
+ * An array is "tabular" if every item is either a scalar or a
+ * plain object — regardless of whether the object's own values
+ * are themselves nested. Mixed arrays-of-objects route through
+ * the table renderer (with compact placeholders for any nested
+ * cells) rather than dropping to `util.inspect`.
+ */
+function isTabularArray(v: unknown[]): boolean {
+  if (v.length === 0) return false
+  return v.every((item) => isScalar(item) || isPlainObject(item))
 }
 
 function isMapOfFlatRecords(v: Record<string, unknown>): boolean {
@@ -163,7 +171,7 @@ function normaliseMapForTable(
 export function prettyFormat(value: unknown): string {
   // Top-level arrays and primitives.
   if (Array.isArray(value)) {
-    if (isFlatArray(value)) {
+    if (isTabularArray(value)) {
       return renderArrayTable(normaliseArrayForTable(value))
     }
 
@@ -215,7 +223,7 @@ export function prettyFormat(value: unknown): string {
     parts.push(`${k}:\n`)
 
     if (Array.isArray(v)) {
-      if (isFlatArray(v)) {
+      if (isTabularArray(v)) {
         parts.push(renderArrayTable(normaliseArrayForTable(v)))
       } else {
         parts.push(inspect(v, { depth: 3, colors: false }) + "\n")

@@ -130,6 +130,87 @@ describe("type-aware coloring", () => {
   })
 })
 
+describe("terminal-width fit", () => {
+  const ORIG_COLS = process.stdout.columns
+
+  // The unit tests run in-process and inherit the runner's
+  // stdout.columns. We mutate it here per-test to verify the
+  // shrink logic; restore after.
+  const setCols = (n: number | undefined): void => {
+    Object.defineProperty(process.stdout, "columns", {
+      configurable: true,
+      value: n,
+    })
+  }
+
+  function restore(): void {
+    setCols(ORIG_COLS)
+  }
+
+  test("natural-fit table is unchanged", () => {
+    setCols(80)
+    try {
+      const out = renderArrayTable([
+        { date: "2024-01-01", value: 1 },
+        { date: "2024-02-01", value: 2 },
+      ])
+      // The natural width is well under 80, so the table doesn't
+      // truncate. Every "2024-XX-XX" survives intact.
+      expect(out).toContain("2024-01-01")
+      expect(out).toContain("2024-02-01")
+      expect(out).not.toContain("…")
+    } finally {
+      restore()
+    }
+  })
+
+  test("wide table is shrunk so the bottom border fits the terminal", () => {
+    setCols(60)
+    try {
+      const out = renderArrayTable([
+        {
+          id: "6113f4d0-6b19-4168-9fb5-5a5279182b9b",
+          name: "Regime Signals",
+          description: "Weekly statistical read on macro regime shifts, cross-asset outliers, and concentration.",
+          topic: "Long topic field that will absolutely not fit at sixty columns wide.",
+        },
+      ])
+
+      // Every line of the rendered table fits the terminal width.
+      for (const line of out.split("\n")) {
+        // string-width counts visible chars only; ANSI is stripped.
+        // eslint-disable-next-line no-control-regex
+        const visible = line.replace(/\x1b\[[0-9;]*m/g, "")
+        expect(visible.length).toBeLessThanOrEqual(60)
+      }
+
+      // Truncated cells show the ellipsis marker.
+      expect(out).toContain("…")
+    } finally {
+      restore()
+    }
+  })
+
+  test("floor: never shrinks a column below 8 chars even at a tiny terminal", () => {
+    setCols(20)
+    try {
+      const out = renderArrayTable([
+        { a: "aaaaaaaaaaaa", b: "bbbbbbbbbbbb" },
+      ])
+      // Two columns + the auto-index → can't squeeze all into 20 cols
+      // without going below the floor. Each column should still be
+      // at least 8 chars wide (we accept the table overflowing).
+      const headerLine = out.split("\n")[1]!
+      // headerLine has 4 separators + 3 padded cells; bare minimum
+      // padded cell width is MIN(8) + 2 padding = 10. Two cells of
+      // that + the auto-index column + separators ≈ 25+.
+      expect(headerLine.length).toBeGreaterThan(20)
+    } finally {
+      restore()
+    }
+  })
+})
+
 describe("hyperlink", () => {
   test("wraps text in OSC 8 escape sequence", () => {
     const result = hyperlink("https://example.com", "click here")

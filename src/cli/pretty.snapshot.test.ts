@@ -160,6 +160,63 @@ describe("prettyPrint — rendered snapshots", () => {
   // past the terminal width with literal `\n` chars breaking row
   // alignment. After the fix: newlines collapse to `⏎ `, long
   // values truncate inline, table integrity preserved.
+  // briefing.sh `list` returns `{ items: [...] }` where each item
+  // is a full briefing object — most fields scalar, but `topic`
+  // can be a multi-paragraph markdown string and `schedules` is a
+  // nested array. Pre-fix this dropped to util.inspect and dumped
+  // the whole object tree. After: rendered as a table, with the
+  // nested `schedules` shown as `[N items]` and the long `topic`
+  // truncated by the per-cell limit.
+  test("briefing list (mixed-shape array, nested arrays as compact placeholders)", async () => {
+    const out = await render({
+      items: [
+        {
+          id: "6113f4d0-6b19-4168-9fb5-5a5279182b9b",
+          name: "Regime Signals",
+          status: "active",
+          description: "Weekly statistical read on macro regime shifts, cross-asset outliers, and concentration — percentiles and z-scores only.",
+          topic: "# Market Regime & Outlier Briefing — Weekly\n\nYou are a global-macro strategist. The job is **not** to summarize the week's news — it is to surface the few statistical readings that materially shifted regime / risk / concentration.",
+          schedules: [
+            { cron: "0 7 * * 1", timezone: "America/New_York" },
+            { cron: "0 7 * * 5", timezone: "America/New_York" },
+          ],
+        },
+        {
+          id: "a1b2c3d4-...",
+          name: "Daily Macro",
+          status: "paused",
+          description: "Single short brief at the close.",
+          topic: "Closing-price macro brief.",
+          schedules: [],
+        },
+      ],
+    })
+
+    expect(out).toMatchSnapshot()
+  })
+
+  test("array of objects with one nested field (the listBriefingsCmd raw shape)", async () => {
+    // Same shape but bare array — the outer `{ items: [...] }`
+    // wrap isn't part of the test. Verifies that mixed-shape
+    // arrays render as a single table from the top.
+    const out = await render([
+      {
+        id: "a",
+        name: "Alpha",
+        status: "active",
+        schedules: [{ cron: "0 7 * * 1" }],
+      },
+      {
+        id: "b",
+        name: "Beta",
+        status: "draft",
+        schedules: [],
+      },
+    ])
+
+    expect(out).toMatchSnapshot()
+  })
+
   test("edgar-filings read (long body + long URL, the original repro)", async () => {
     const out = await render({
       ticker: "AAPL",

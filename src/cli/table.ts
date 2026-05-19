@@ -35,10 +35,46 @@ const BOX = {
   v: "│",
 }
 
+// ----- terminal-aware sizing -------------------------------------------------
+//
+// We never let the rendered table exceed the terminal width. The
+// natural per-column widths are computed first; if the sum + box
+// overhead exceeds `process.stdout.columns`, we iteratively shrink
+// the widest column by one until the table fits (with a per-column
+// floor so the headers stay readable). Cells whose content exceeds
+// the final column width are truncated to one ellipsis at the end.
+
+const TERMINAL_FALLBACK = 120
+const MIN_COL_WIDTH = 8
+
+function terminalWidth(): number {
+  // `process.stdout.columns` is `undefined` for non-TTYs (pipes,
+  // captured stdout, snapshot subprocesses). Falling back to a
+  // generous default keeps non-TTY output legible without forcing
+  // every test to set a width.
+  return process.stdout.columns || TERMINAL_FALLBACK
+}
+
+/** ANSI escape stripper used to measure / truncate visible content. */
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m|\x1b\]8;;[^\x1b]*\x1b\\/g
+
+/** Truncate a cell so its visible width fits inside `width`. */
+function truncate(content: string, width: number): string {
+  if (stringWidth(content) <= width) return content
+  // Strip ANSI for slicing; we accept losing type-color / hyperlink
+  // styling on truncated cells. The unstyled prefix is still
+  // readable and the table layout survives.
+  const visible = content.replace(ANSI_RE, "")
+  if (visible.length <= width) return content
+  return visible.slice(0, Math.max(1, width - 1)).trimEnd() + "…"
+}
+
 function pad(content: string, width: number): string {
-  const padCount = width - stringWidth(content)
-  if (padCount <= 0) return content
-  return content + " ".repeat(padCount)
+  const fitted = truncate(content, width)
+  const padCount = width - stringWidth(fitted)
+  if (padCount <= 0) return fitted
+  return fitted + " ".repeat(padCount)
 }
 
 function rule(widths: number[], side: keyof typeof BOX): string {
@@ -64,8 +100,47 @@ function columnWidths(headers: string[], rows: string[][]): number[] {
   })
 }
 
+/**
+ * Fixed per-column overhead: `│ ` left padding + ` ` right padding.
+ * Plus one trailing `│` at the end of the row.
+ */
+function tableOverhead(numCols: number): number {
+  return numCols * 3 + 1
+}
+
+/**
+ * Shrink the widest column repeatedly until the total table width
+ * fits `terminalWidth()`. Floors each column at `MIN_COL_WIDTH`
+ * so headers stay readable; if the table can't fit even at the
+ * floor, returns the floored widths anyway and lets the terminal
+ * wrap (rare in practice — would need >12 columns at 120 wide).
+ */
+function shrinkToFit(widths: number[]): number[] {
+  const max = terminalWidth() - tableOverhead(widths.length)
+  let total = widths.reduce((s, w) => s + w, 0)
+  if (total <= max) return widths
+
+  const result = widths.slice()
+  while (total > max) {
+    let widestIdx = -1
+    let widestVal = MIN_COL_WIDTH
+    for (let i = 0; i < result.length; i++) {
+      if (result[i]! > widestVal) {
+        widestIdx = i
+        widestVal = result[i]!
+      }
+    }
+
+    if (widestIdx === -1) break // every column at the floor; give up
+    result[widestIdx]! -= 1
+    total -= 1
+  }
+
+  return result
+}
+
 function render(headers: string[], rows: string[][]): string {
-  const widths = columnWidths(headers, rows)
+  const widths = shrinkToFit(columnWidths(headers, rows))
   // Column 0 in every renderer is the "leftmost label" — auto-index
   // in `renderArrayTable`, key in `renderObjectTable`, outer key in
   // `renderMapTable`. Bold it (it's a label, not a value). Type-color
@@ -87,7 +162,16 @@ function cellString(v: unknown): string {
   if (v === null) return "null"
   if (v === undefined) return ""
   if (typeof v === "string") return v
-  return String(v)
+  if (typeof v !== "object") return String(v)
+  // Nested arrays / objects in a single cell would dump
+  // `[object Object]` via `String(v)`. Render a compact preview
+  // instead — `[N items]` for arrays, `{ k, k, … }` for objects —
+  // so the row still scans as one line and the per-cell
+  // truncation upstream can clip it if needed.
+  if (Array.isArray(v)) return `[${v.length} items]`
+  const keys = Object.keys(v as Record<string, unknown>)
+  const preview = keys.slice(0, 3).join(", ")
+  return keys.length > 3 ? `{ ${preview}, … }` : `{ ${preview} }`
 }
 
 /**
