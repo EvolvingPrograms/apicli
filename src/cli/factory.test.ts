@@ -69,7 +69,7 @@ describe("createCli — command dispatch", () => {
     // exitOverride; since we already stub process.exit, the
     // action callback can run normally.
     cli.program.exitOverride()
-    await runCli(cli, ["echo", "hello"])
+    await runCli(cli, ["--json", "echo", "hello"])
 
     expect(stdout.join("")).toBe(`{"out":"hello"}\n`)
   })
@@ -117,7 +117,7 @@ describe("createCli — command dispatch", () => {
     })
     cli.program.exitOverride()
 
-    await runCli(cli, ["list", "--symbols", "SPY,AAPL"])
+    await runCli(cli, ["--json", "list", "--symbols", "SPY,AAPL"])
     expect(stdout.join("")).toBe(`["SPY","AAPL"]\n`)
   })
 
@@ -145,7 +145,7 @@ describe("createCli — command dispatch", () => {
     cli.program.exitOverride()
 
     const originalArgv = process.argv
-    process.argv = ["bun", "test-cli", "ping"]
+    process.argv = ["bun", "test-cli", "--json", "ping"]
     try {
       await cli.run()
     } finally {

@@ -14,8 +14,22 @@ import type { Command } from "commander"
 import { z } from "zod"
 import type { AnyEndpointSpec, StoredApi } from "../types"
 import { collectArgs, walkSchemaToCommander } from "../cli/walker"
+import type { EmitMode } from "../cli/emit"
 import { emit, mapError } from "../cli/emit"
 import { callDependent, callEndpoint, isDependentEndpoint } from "./call"
+
+function rootProgram(cmd: Command): Command {
+  let cur = cmd
+  while (cur.parent) cur = cur.parent
+  return cur
+}
+
+function modeFromRoot(cmd: Command): EmitMode | undefined {
+  const opts = rootProgram(cmd).opts()
+  if (opts.json) return "json"
+  if (opts.pretty) return "pretty"
+  return undefined
+}
 
 export interface AddApiCliOptions {
   /** Sub-name under which to register the endpoint tree. Default: "api". */
@@ -75,7 +89,7 @@ function registerEndpoint(
     try {
       const args = collectArgs(endpoint.params, [], argv)
       const result = await callEndpoint(api.__spec, endpoint, args)
-      emit(result)
+      emit(result, { mode: modeFromRoot(sub) })
     } catch (err) {
       mapError(err, errOpts.errorName, errOpts.errorClass)
     }
@@ -114,7 +128,7 @@ function registerDependent(
     try {
       const args = collectArgs(fullSchema, [], argv)
       const result = await callDependent(api.__spec, endpoint, args)
-      emit(result)
+      emit(result, { mode: modeFromRoot(sub) })
     } catch (err) {
       mapError(err, errOpts.errorName, errOpts.errorClass)
     }

@@ -126,11 +126,11 @@ afterEach(() => {
 })
 
 async function runEcho(argv: string[]): Promise<void> {
-  await echoCli.program.parseAsync(["bun", "echo-cli", ...argv])
+  await echoCli.program.parseAsync(["bun", "echo-cli", "--json", ...argv])
 }
 
 async function runKebab(argv: string[]): Promise<void> {
-  await kebabCli.program.parseAsync(["bun", "kebab-cli", ...argv])
+  await kebabCli.program.parseAsync(["bun", "kebab-cli", "--json", ...argv])
 }
 
 describe("api-cli integration", () => {
