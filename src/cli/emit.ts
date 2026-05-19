@@ -41,19 +41,25 @@ function envFlag(name: string): boolean {
   return v !== "0" && v.toLowerCase() !== "false"
 }
 
-function resolveMode(opts: EmitOptions): EmitMode {
-  // 1. Explicit flag wins.
-  if (opts.mode) return opts.mode
-
-  // 2. Env shifts the default. `PRETTY=1` is the no-op default, but
-  //    we honour it so a shell can pin the mode unambiguously even
-  //    if `JSON=1` is exported elsewhere. Explicit pretty beats
-  //    implicit json.
+/**
+ * The mode that would be chosen with no explicit flag — derived
+ * from `PRETTY` / `JSON` env vars, falling back to `pretty`. Used
+ * both by `emit` (runtime selection) and by `createCli` (so
+ * `--help` can mark the currently-active default).
+ */
+export function resolveDefaultMode(): EmitMode {
+  // `PRETTY=1` is the no-op default, but we honour it so a shell
+  // can pin the mode unambiguously even if `JSON=1` is exported
+  // elsewhere. Explicit pretty beats implicit json.
   if (envFlag("PRETTY")) return "pretty"
   if (envFlag("JSON")) return "json"
-
-  // 3. Built-in default.
   return "pretty"
+}
+
+function resolveMode(opts: EmitOptions): EmitMode {
+  // Explicit flag wins, otherwise fall through to env-derived default.
+  if (opts.mode) return opts.mode
+  return resolveDefaultMode()
 }
 
 export function emit(value: unknown, opts: EmitOptions = {}): void {

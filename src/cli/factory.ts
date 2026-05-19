@@ -9,18 +9,31 @@ import { Command } from "commander"
 import { addApiCli } from "../api/cli"
 import type { Cli, CreateCliOptions, StoredCommand } from "../types"
 import type { EmitMode } from "./emit"
-import { emit, mapError } from "./emit"
+import { emit, mapError, resolveDefaultMode } from "./emit"
 import { collectArgs, walkSchemaToCommander } from "./walker"
 
 export function createCli(opts: CreateCliOptions): Cli {
   const program = new Command().name(opts.name).description(opts.description)
 
-  // Program-level output mode flags. Default is `--pretty` (a
+  // Program-level output mode flags. Default is `pretty` (a
   // formatted table via `console.table`); `--json` opts out into
-  // raw JSON. Set `JSON=1` in the env to shift the default for
-  // a shell session — an explicit flag always overrides.
-  program.option("--json", "Emit raw JSON.")
-  program.option("--pretty", "Emit a formatted table (default).")
+  // raw JSON. `JSON=1` / `PRETTY=1` in the env shift the default
+  // for a shell session, and the `(default)` annotation in `--help`
+  // reflects whichever mode is currently active — an explicit flag
+  // always overrides at call time.
+  const defaultMode = resolveDefaultMode()
+
+  program
+    .option(
+      "--json",
+      defaultMode === "json" ? "Emit raw JSON (default)." : "Emit raw JSON.",
+    )
+    .option(
+      "--pretty",
+      defaultMode === "pretty"
+        ? "Emit a formatted table (default)."
+        : "Emit a formatted table.",
+    )
 
   for (const cmd of opts.commands) {
     registerCommand(program, cmd, opts)
@@ -55,6 +68,7 @@ function registerCommand(
     try {
       const argsIn = collectArgs(cmd.schema, cmd.positional, argv)
       const result = await cmd.invoke(argsIn)
+
       // `program.opts()` reads parent-level options. Commander accepts
       // the flag in either position (`cli --json list` or `cli list --json`).
       // Explicit `--json` / `--pretty` beats env defaults inside `emit`.
@@ -64,6 +78,7 @@ function registerCommand(
         : programOpts.pretty
           ? "pretty"
           : undefined
+
       emit(result, { mode })
     } catch (err) {
       mapError(err, cliOpts.name, cliOpts.errorClass)

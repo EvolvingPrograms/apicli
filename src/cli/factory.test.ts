@@ -155,6 +155,41 @@ describe("createCli — command dispatch", () => {
     expect(stdout.join("")).toBe(`{"ok":true}\n`)
   })
 
+  test("--help marks --pretty as (default) when no env override is set", () => {
+    const prevJson = process.env.JSON
+    const prevPretty = process.env.PRETTY
+    delete process.env.JSON
+    delete process.env.PRETTY
+    try {
+      const cli = createCli({ name: "test-cli", description: "test", commands: [] })
+      const help = cli.program.helpInformation()
+      expect(help).toMatch(/--pretty\s+Emit a formatted table \(default\)\./)
+      expect(help).toMatch(/--json\s+Emit raw JSON\./)
+      expect(help).not.toContain("Emit raw JSON (default).")
+    } finally {
+      if (prevJson !== undefined) process.env.JSON = prevJson
+      if (prevPretty !== undefined) process.env.PRETTY = prevPretty
+    }
+  })
+
+  test("--help marks --json as (default) when JSON=1 is set in the env", () => {
+    const prevJson = process.env.JSON
+    const prevPretty = process.env.PRETTY
+    process.env.JSON = "1"
+    delete process.env.PRETTY
+    try {
+      const cli = createCli({ name: "test-cli", description: "test", commands: [] })
+      const help = cli.program.helpInformation()
+      expect(help).toMatch(/--json\s+Emit raw JSON \(default\)\./)
+      expect(help).toMatch(/--pretty\s+Emit a formatted table\./)
+      expect(help).not.toContain("Emit a formatted table (default).")
+    } finally {
+      if (prevJson !== undefined) process.env.JSON = prevJson
+      else delete process.env.JSON
+      if (prevPretty !== undefined) process.env.PRETTY = prevPretty
+    }
+  })
+
   test("passing `api` adds the auto-generated `api <endpoint>` subcommand tree", () => {
     // Just verify the wiring — the addApiCli atomic tests cover
     // walker + dispatch behavior in depth.
