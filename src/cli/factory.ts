@@ -18,15 +18,24 @@ import { collectArgs, walkSchemaToCommander } from "./walker"
 /**
  * Default help-styling hooks. Section titles ("Usage:",
  * "Options:") render bold; the body text of descriptions
- * dims; command names render in italic. Caller-provided
- * style hooks merge per-property over these defaults.
+ * dims; the command name in "Usage:" is italic. Subcommand
+ * terms only bold the leading command name — `<arg>` and
+ * `[opt]` syntax inside the term stays plain so the angle/
+ * bracket structure reads as syntax, not emphasis.
+ *
+ * Caller-provided style hooks merge per-property over these
+ * defaults.
  */
 const DEFAULT_HELP_STYLE: HelpConfiguration = {
   styleTitle: (s) => bold(s),
   styleCommandText: (s) => italic(s),
   styleOptionTerm: (s) => bold(s),
-  styleSubcommandTerm: (s) => bold(s),
-  styleArgumentTerm: (s) => bold(s),
+  // Bold the command name (everything up to the first whitespace)
+  // and leave the rest — argument syntax — unstyled.
+  styleSubcommandTerm: (s) => {
+    const i = s.search(/\s/)
+    return i === -1 ? bold(s) : bold(s.slice(0, i)) + s.slice(i)
+  },
   styleDescriptionText: (s) => dim(s),
 }
 
