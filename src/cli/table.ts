@@ -33,6 +33,47 @@ const BOX = {
   v: "│",
 }
 
+// ----- color -----------------------------------------------------------------
+//
+// Type-aware coloring for cell contents, gated on `process.stdout.isTTY`.
+// Mirrors the conventions a developer would recognise from `jq -C`, Bun's
+// own `console.table`, and most syntax-highlighted REPLs: dates in cyan,
+// numbers in yellow, booleans in magenta, null/blank dimmed, strings
+// default. Coloring never widens a cell — `stringWidth` strips ANSI
+// before measuring.
+
+const ANSI = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  yellow: "\x1b[33m",
+  cyan: "\x1b[36m",
+  magenta: "\x1b[35m",
+  gray: "\x1b[90m",
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.+\-Z]+)?$/
+const NUMBER_RE = /^-?\d+(\.\d+)?$/
+
+function colorEnabled(): boolean {
+  // `NO_COLOR` wins (https://no-color.org). `FORCE_COLOR` opts in even
+  // when piped — useful for `--pretty | less -R`. Otherwise: TTY only.
+  if (process.env.NO_COLOR) return false
+  if (process.env.FORCE_COLOR) return true
+  return Boolean(process.stdout.isTTY)
+}
+
+function colorize(cell: string): string {
+  if (!colorEnabled() || cell === "") return cell
+  if (cell === "null") return ANSI.gray + cell + ANSI.reset
+  if (cell === "true" || cell === "false") {
+    return ANSI.magenta + cell + ANSI.reset
+  }
+
+  if (DATE_RE.test(cell)) return ANSI.cyan + cell + ANSI.reset
+  if (NUMBER_RE.test(cell)) return ANSI.yellow + cell + ANSI.reset
+  return cell
+}
+
 function pad(content: string, width: number): string {
   const padCount = width - stringWidth(content)
   if (padCount <= 0) return content
@@ -64,9 +105,15 @@ function columnWidths(headers: string[], rows: string[][]): number[] {
 
 function render(headers: string[], rows: string[][]): string {
   const widths = columnWidths(headers, rows)
+  // Column 0 in every renderer is the "leftmost label" — auto-index
+  // in `renderArrayTable`, key in `renderObjectTable`, outer key in
+  // `renderMapTable`. Skip color there; type-color every other column.
+  const colored = rows.map((r) =>
+    r.map((cell, ci) => (ci === 0 ? cell : colorize(cell))),
+  )
   const lines = [rule(widths, "top"), row(headers, widths), rule(widths, "mid")]
-  for (let i = 0; i < rows.length; i++) {
-    lines.push(row(rows[i]!, widths))
+  for (let i = 0; i < colored.length; i++) {
+    lines.push(row(colored[i]!, widths))
   }
 
   lines.push(rule(widths, "bot"))

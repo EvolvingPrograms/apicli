@@ -100,6 +100,92 @@ describe("renderMapTable", () => {
   })
 })
 
+describe("type-aware coloring", () => {
+  // Coloring is gated on `process.stdout.isTTY`. We can't fake a TTY
+  // cheaply, but `FORCE_COLOR=1` overrides the gate — same path the
+  // env uses to opt in when piping. Each test sets/unsets it.
+
+  function withForceColor<T>(fn: () => T): T {
+    const prior = process.env.FORCE_COLOR
+    process.env.FORCE_COLOR = "1"
+    try {
+      return fn()
+    } finally {
+      if (prior === undefined) delete process.env.FORCE_COLOR
+      else process.env.FORCE_COLOR = prior
+    }
+  }
+
+  test("NO_COLOR=1 disables coloring even with FORCE_COLOR=1", () => {
+    const priorNo = process.env.NO_COLOR
+    process.env.NO_COLOR = "1"
+    try {
+      const out = withForceColor(() =>
+        renderArrayTable([{ date: "2024-01-01", n: 1 }]),
+      )
+      expect(out).not.toContain("\x1b[")
+    } finally {
+      if (priorNo === undefined) delete process.env.NO_COLOR
+      else process.env.NO_COLOR = priorNo
+    }
+  })
+
+  test("ISO date cells are wrapped in cyan", () => {
+    const out = withForceColor(() =>
+      renderArrayTable([{ date: "2024-01-01", n: 1 }]),
+    )
+    expect(out).toContain("\x1b[36m2024-01-01\x1b[0m")
+  })
+
+  test("numeric cells are wrapped in yellow", () => {
+    const out = withForceColor(() =>
+      renderArrayTable([{ date: "2024-01-01", n: 42.5 }]),
+    )
+    expect(out).toContain("\x1b[33m42.5\x1b[0m")
+  })
+
+  test("the auto-index column stays uncolored even though it's numeric", () => {
+    const out = withForceColor(() =>
+      renderArrayTable([{ n: 7 }, { n: 8 }]),
+    )
+    // Index "0" / "1" are bare; only "7" and "8" pick up yellow.
+    expect(out).toContain("│ 0 │")
+    expect(out).toContain("│ 1 │")
+    expect(out).toContain("\x1b[33m7\x1b[0m")
+    expect(out).toContain("\x1b[33m8\x1b[0m")
+  })
+
+  test("booleans get magenta, null gets gray", () => {
+    const out = withForceColor(() =>
+      renderArrayTable([{ ok: true, miss: null }]),
+    )
+    expect(out).toContain("\x1b[35mtrue\x1b[0m")
+    expect(out).toContain("\x1b[90mnull\x1b[0m")
+  })
+
+  test("renderObjectTable colors the Values column, not the keys", () => {
+    const out = withForceColor(() =>
+      renderObjectTable({ date: "2024-01-01", n: 42 }),
+    )
+    // Keys (column 0) stay uncolored.
+    expect(out).toContain("│ date ")
+    expect(out).toContain("│ n    ")
+    expect(out).toContain("\x1b[36m2024-01-01\x1b[0m")
+    expect(out).toContain("\x1b[33m42\x1b[0m")
+  })
+
+  test("widths still measure visible characters (table doesn't widen)", () => {
+    const colored = withForceColor(() =>
+      renderArrayTable([{ date: "2024-01-01", n: 1 }]),
+    )
+    const plain = renderArrayTable([{ date: "2024-01-01", n: 1 }])
+    // Strip ANSI from the colored version; geometry should match.
+    // eslint-disable-next-line no-control-regex
+    const stripped = colored.replace(/\x1b\[[0-9;]*m/g, "")
+    expect(stripped).toBe(plain)
+  })
+})
+
 describe("hyperlink", () => {
   test("wraps text in OSC 8 escape sequence", () => {
     const result = hyperlink("https://example.com", "click here")
