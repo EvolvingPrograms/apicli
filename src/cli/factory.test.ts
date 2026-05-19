@@ -155,13 +155,6 @@ describe("createCli — command dispatch", () => {
     expect(stdout.join("")).toBe(`{"ok":true}\n`)
   })
 
-  // Help output now wraps terms in bold and descriptions in dim
-  // ANSI escapes (FORCE_COLOR=1 in the test setup). Strip the
-  // escapes before asserting so the tests still target the
-  // (default) marker on the right flag.
-  // eslint-disable-next-line no-control-regex
-  const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
-
   test("--help marks --pretty as (default) when no env override is set", () => {
     const prevJson = process.env.JSON
     const prevPretty = process.env.PRETTY
@@ -169,7 +162,7 @@ describe("createCli — command dispatch", () => {
     delete process.env.PRETTY
     try {
       const cli = createCli({ name: "test-cli", description: "test", commands: [] })
-      const help = stripAnsi(cli.program.helpInformation())
+      const help = Bun.stripANSI(cli.program.helpInformation())
       expect(help).toMatch(/--pretty\s+Emit a formatted table \(default\)\./)
       expect(help).toMatch(/--json\s+Emit raw JSON\./)
       expect(help).not.toContain("Emit raw JSON (default).")
@@ -186,7 +179,7 @@ describe("createCli — command dispatch", () => {
     delete process.env.PRETTY
     try {
       const cli = createCli({ name: "test-cli", description: "test", commands: [] })
-      const help = stripAnsi(cli.program.helpInformation())
+      const help = Bun.stripANSI(cli.program.helpInformation())
       expect(help).toMatch(/--json\s+Emit raw JSON \(default\)\./)
       expect(help).toMatch(/--pretty\s+Emit a formatted table\./)
       expect(help).not.toContain("Emit a formatted table (default).")
