@@ -29,9 +29,10 @@ import { collectArgs, walkSchemaToCommander } from "./walker"
 const DEFAULT_HELP_STYLE: HelpConfiguration = {
   styleTitle: (s) => bold(s),
   styleCommandText: (s) => italic(s),
-  styleOptionTerm: (s) => bold(s),
   // Bold the command name (everything up to the first whitespace)
-  // and leave the rest — argument syntax — unstyled.
+  // and leave the rest — argument syntax — unstyled. Option terms
+  // (`--json`, `-h, --help`) stay plain too: it's syntax, not
+  // emphasis.
   styleSubcommandTerm: (s) => {
     const i = s.search(/\s/)
     return i === -1 ? bold(s) : bold(s.slice(0, i)) + s.slice(i)
