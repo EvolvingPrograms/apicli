@@ -1,0 +1,6 @@
+[test]
+# Pin `FORCE_COLOR=1` for the whole suite so snapshots + exact-string
+# assertions are deterministic — regardless of whether `bun test`
+# happens to allocate a TTY. The table renderer's color path is
+# part of the contract; tests should exercise it, not skip it.
+preload = ["./src/test-setup.ts"]

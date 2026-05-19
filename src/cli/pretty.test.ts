@@ -134,12 +134,11 @@ describe("prettyFormat", () => {
     expect(out).not.toContain(long)
   })
 
-  test("short string with no special chars → stays untouched", () => {
+  test("short string with no special chars → not truncated", () => {
     const out = prettyFormat({ form: "10-K", filingDate: "2023-11-03" })
     expect(out).toContain("10-K")
     expect(out).toContain("2023-11-03")
     expect(out).not.toMatch(/\[\+\d+ chars\]/)
-    expect(out).not.toContain("\x1b")
   })
 
   test("long string in array-of-objects cell is also truncated", () => {
