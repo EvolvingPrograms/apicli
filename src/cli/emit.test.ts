@@ -2,31 +2,27 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { z } from "zod"
 import { emit, mapError } from "./emit"
 
-// Capture stdout/stderr writes + console.table calls + stub
-// process.exit so tests observe outcomes without emitting to the
-// runner. `console.table` writes through Bun's internal stdout fd
-// (bypassing our `process.stdout.write` shim), so we spy on the
-// method directly.
+// Capture stdout/stderr writes + stub process.exit so tests
+// observe outcomes without emitting to the runner. `prettyPrint`
+// now writes directly to `process.stdout.write` (no more
+// `console.table` dance), so a single shim on stdout sees
+// everything emit emits.
 let stdout: string[]
 let stderr: string[]
-let tableCalls: unknown[]
 let exitCode: number | undefined
 
 let realStdoutWrite: typeof process.stdout.write
 let realStderrWrite: typeof process.stderr.write
 let realExit: typeof process.exit
-let realConsoleTable: typeof console.table
 
 beforeEach(() => {
   stdout = []
   stderr = []
-  tableCalls = []
   exitCode = undefined
 
   realStdoutWrite = process.stdout.write.bind(process.stdout)
   realStderrWrite = process.stderr.write.bind(process.stderr)
   realExit = process.exit.bind(process)
-  realConsoleTable = console.table.bind(console)
 
   process.stdout.write = ((data: string | Uint8Array) => {
     stdout.push(typeof data === "string" ? data : data.toString())
@@ -42,17 +38,12 @@ beforeEach(() => {
     exitCode = code
     throw new Error(`__exit_${code ?? 0}__`)
   }) as typeof process.exit
-
-  console.table = ((value: unknown) => {
-    tableCalls.push(value)
-  }) as typeof console.table
 })
 
 afterEach(() => {
   process.stdout.write = realStdoutWrite
   process.stderr.write = realStderrWrite
   process.exit = realExit
-  console.table = realConsoleTable
 })
 
 function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
@@ -75,10 +66,18 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
 describe("emit", () => {
   // ---- explicit modes ------------------------------------------------------
 
+  // Pretty mode renders a box-drawing table; we don't pin the exact
+  // characters here (pretty.snapshot.test.ts does that). Each
+  // assertion just checks that the value made it into the
+  // rendered output via the table renderer.
+  const expectsTable = (out: string, content: string): void => {
+    expect(out).toMatch(/^┌/)
+    expect(out).toContain(content)
+  }
+
   test("explicit json mode writes raw JSON + newline", () => {
     emit({ ok: true }, { mode: "json" })
     expect(stdout.join("")).toBe(`{"ok":true}\n`)
-    expect(tableCalls).toEqual([])
   })
 
   test("explicit json handles arrays + scalars", () => {
@@ -86,10 +85,9 @@ describe("emit", () => {
     expect(stdout.join("")).toBe(`[1,2,3]\n`)
   })
 
-  test("explicit pretty mode renders via console.table", () => {
+  test("explicit pretty mode renders as a table", () => {
     emit({ ok: true }, { mode: "pretty" })
-    expect(stdout.join("")).toBe("")
-    expect(tableCalls).toEqual([{ ok: true }])
+    expectsTable(stdout.join(""), "true")
   })
 
   // ---- built-in default ----------------------------------------------------
@@ -97,8 +95,7 @@ describe("emit", () => {
   test("no options + no env defaults to pretty", () => {
     withEnv({ JSON: undefined, PRETTY: undefined }, () => {
       emit({ ok: true })
-      expect(stdout.join("")).toBe("")
-      expect(tableCalls).toEqual([{ ok: true }])
+      expectsTable(stdout.join(""), "true")
     })
   })
 
@@ -108,29 +105,29 @@ describe("emit", () => {
     withEnv({ JSON: "1", PRETTY: undefined }, () => {
       emit({ ok: true })
       expect(stdout.join("")).toBe(`{"ok":true}\n`)
-      expect(tableCalls).toEqual([])
     })
   })
 
   test("env PRETTY=1 shifts the default to pretty (already the default)", () => {
     withEnv({ JSON: undefined, PRETTY: "1" }, () => {
       emit({ ok: true })
-      expect(stdout.join("")).toBe("")
-      expect(tableCalls).toEqual([{ ok: true }])
+      expectsTable(stdout.join(""), "true")
     })
   })
 
   test("env JSON=0 / JSON=false is treated as unset", () => {
     withEnv({ JSON: "0", PRETTY: undefined }, () => {
       emit({ ok: true })
-      expect(stdout.join("")).toBe("")
-      expect(tableCalls).toEqual([{ ok: true }])
+      expectsTable(stdout.join(""), "true")
     })
 
+    // Reset captured output for the second invocation.
+    stdout.length = 0
     withEnv({ JSON: "false", PRETTY: undefined }, () => {
       emit({ ok: true })
     })
-    expect(stdout.join("")).toBe("")
+
+    expectsTable(stdout.join(""), "true")
   })
 
   // ---- explicit flag overrides env default ---------------------------------
@@ -138,8 +135,7 @@ describe("emit", () => {
   test("explicit --pretty overrides env JSON=1", () => {
     withEnv({ JSON: "1", PRETTY: undefined }, () => {
       emit({ ok: true }, { mode: "pretty" })
-      expect(stdout.join("")).toBe("")
-      expect(tableCalls).toEqual([{ ok: true }])
+      expectsTable(stdout.join(""), "true")
     })
   })
 
@@ -147,15 +143,13 @@ describe("emit", () => {
     withEnv({ JSON: undefined, PRETTY: "1" }, () => {
       emit({ ok: true }, { mode: "json" })
       expect(stdout.join("")).toBe(`{"ok":true}\n`)
-      expect(tableCalls).toEqual([])
     })
   })
 
   test("when both env vars are set, PRETTY beats JSON for the default", () => {
     withEnv({ JSON: "1", PRETTY: "1" }, () => {
       emit({ ok: true })
-      expect(stdout.join("")).toBe("")
-      expect(tableCalls).toEqual([{ ok: true }])
+      expectsTable(stdout.join(""), "true")
     })
   })
 })

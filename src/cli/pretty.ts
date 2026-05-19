@@ -30,6 +30,13 @@
 
 import { inspect } from "node:util"
 
+import {
+  hyperlink,
+  renderArrayTable,
+  renderMapTable,
+  renderObjectTable,
+} from "./table"
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
 }
@@ -51,35 +58,55 @@ function isMapOfFlatRecords(v: Record<string, unknown>): boolean {
   return vals.length > 0 && vals.every(isFlatObject)
 }
 
-// Two failure modes for string values inside `console.table`:
+// Three failure modes for string values inside a table cell:
 //
-//   1. Newlines render literally, breaking row alignment — the
-//      right border drifts to wrap each line.
+//   1. Newlines render literally and break row alignment.
 //   2. Very long single-line strings stretch a column across the
 //      whole terminal, even when the value isn't load-bearing.
+//   3. URLs in particular are useless when truncated — you can't
+//      copy what's not there. So we keep them clickable via an
+//      OSC 8 hyperlink escape (terminals that support it render
+//      the visible text as a link; others render it as plain
+//      text, with the escape bytes hidden in supporting tools).
 //
-// We normalise each string before it hits `console.table`:
+// We normalise each table-bound string accordingly:
 //
-//   - newlines collapse to a visible `⏎ ` marker so the cell
-//     stays single-line and the table's row alignment survives;
-//   - anything over MAX_INLINE_LENGTH is truncated with a
-//     `… [+N chars]` tail.
+//   - URL-shaped values → truncated visible text wrapped in
+//     OSC 8 hyperlink to the full URL.
+//   - Newlines collapse to a `⏎ ` marker so the cell stays
+//     single-line.
+//   - Anything over MAX_INLINE_LENGTH (and not a URL) is
+//     truncated with a `… [+N chars]` tail.
 //
-// Truncating URLs is a known tradeoff — the alternative (rendering
-// them out-of-line below the table) split the output into two
-// sections and read worse for the common case. If a user needs
-// the full URL or body content, they can re-run with `--json`.
+// Width measurement uses `string-width` from our own
+// `./table` module, which correctly strips OSC 8 + SGR before
+// measuring — `console.table` couldn't (it counts every byte),
+// which is why we replaced it with the local renderer.
 const MAX_INLINE_LENGTH = 80
 const NEWLINE_MARKER = " ⏎ "
 
+function isUrl(v: string): boolean {
+  return /^https?:\/\//.test(v)
+}
+
+function truncateVisible(s: string, max: number): string {
+  if (s.length <= max) return s
+  const head = s.slice(0, max - 14).trimEnd()
+  return `${head}… [+${s.length - head.length} chars]`
+}
+
 function normaliseForTable(v: unknown): unknown {
   if (typeof v !== "string") return v
+  // URLs: keep clickable via OSC 8, truncate the visible text
+  // so the column doesn't stretch across the terminal.
+  if (isUrl(v)) {
+    if (v.length <= MAX_INLINE_LENGTH) return hyperlink(v, v)
+    const visible = truncateVisible(v, MAX_INLINE_LENGTH)
+    return hyperlink(v, visible)
+  }
+
   const flat = v.includes("\n") ? v.replaceAll(/\n+/g, NEWLINE_MARKER) : v
-  if (flat.length <= MAX_INLINE_LENGTH) return flat
-  // Reserve ~14 chars for the ` … [+N chars]` marker so the cell
-  // never exceeds MAX_INLINE_LENGTH overall.
-  const head = flat.slice(0, MAX_INLINE_LENGTH - 14).trimEnd()
-  return `${head}… [+${v.length - head.length} chars]`
+  return truncateVisible(flat, MAX_INLINE_LENGTH)
 }
 
 function normaliseObjectForTable(obj: Record<string, unknown>): Record<string, unknown> {
@@ -108,46 +135,48 @@ function normaliseMapForTable(
   return out
 }
 
-export function prettyPrint(value: unknown): void {
+/**
+ * Build the pretty-printed string for `value`. Returns the
+ * complete rendering (including trailing newlines); callers are
+ * responsible for writing it to stdout. Keeping this as a pure
+ * function makes it cheap to unit-test and snapshot.
+ */
+export function prettyFormat(value: unknown): string {
   // Top-level arrays and primitives.
   if (Array.isArray(value)) {
     if (isFlatArray(value)) {
-      console.table(normaliseArrayForTable(value))
-    } else {
-      console.log(inspect(value, { depth: 4, colors: false }))
+      return renderArrayTable(normaliseArrayForTable(value))
     }
 
-    return
+    return inspect(value, { depth: 4, colors: false }) + "\n"
   }
 
   if (!isPlainObject(value)) {
-    console.log(value)
-    return
+    return String(value) + "\n"
   }
 
   // Whole-object shortcuts.
   if (Object.values(value).every(isScalar)) {
-    console.table(normaliseObjectForTable(value))
-    return
+    return renderObjectTable(normaliseObjectForTable(value))
   }
 
   if (isMapOfFlatRecords(value)) {
-    console.table(normaliseMapForTable(value))
-    return
+    return renderMapTable(normaliseMapForTable(value))
   }
 
   // Mixed: walk entries in insertion order. Batch adjacent scalars
   // into one "header block" and render each container value as its
   // own labelled table.
+  const parts: string[] = []
   let scalarBuffer: [string, unknown][] = []
 
   const flushScalars = (): void => {
     if (scalarBuffer.length === 0) return
     for (const [k, v] of scalarBuffer) {
-      console.log(`${k}: ${v}`)
+      parts.push(`${k}: ${v}\n`)
     }
 
-    console.log("")
+    parts.push("\n")
     scalarBuffer = []
   }
 
@@ -164,26 +193,35 @@ export function prettyPrint(value: unknown): void {
     }
 
     flushScalars()
-    console.log(`${k}:`)
+    parts.push(`${k}:\n`)
 
     if (Array.isArray(v)) {
       if (isFlatArray(v)) {
-        console.table(normaliseArrayForTable(v))
+        parts.push(renderArrayTable(normaliseArrayForTable(v)))
       } else {
-        console.log(inspect(v, { depth: 3, colors: false }))
+        parts.push(inspect(v, { depth: 3, colors: false }) + "\n")
       }
     } else if (isPlainObject(v)) {
       if (isFlatObject(v)) {
-        console.table(normaliseObjectForTable(v))
+        parts.push(renderObjectTable(normaliseObjectForTable(v)))
       } else if (isMapOfFlatRecords(v)) {
-        console.table(normaliseMapForTable(v))
+        parts.push(renderMapTable(normaliseMapForTable(v)))
       } else {
-        console.log(inspect(v, { depth: 3, colors: false }))
+        parts.push(inspect(v, { depth: 3, colors: false }) + "\n")
       }
     }
 
-    console.log("")
+    parts.push("\n")
   }
 
   flushScalars()
+  return parts.join("")
+}
+
+/**
+ * Write `prettyFormat(value)` to stdout. Thin shim so the rest
+ * of clipi (emit.ts) can call a single entry point.
+ */
+export function prettyPrint(value: unknown): void {
+  process.stdout.write(prettyFormat(value))
 }

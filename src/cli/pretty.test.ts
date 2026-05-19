@@ -1,71 +1,60 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+/**
+ * Dispatch tests for `prettyFormat`. We don't snapshot rendered
+ * tables here — `pretty.snapshot.test.ts` pins exact rendered
+ * output for the real downstream shapes. These tests assert
+ * routing decisions (which shape goes through which renderer)
+ * and string normalisation behaviour (URL → hyperlink, long →
+ * truncated, multi-line → ⏎ marker) without comparing full
+ * box-drawing strings, so they stay robust against tweaks to
+ * column widths or border characters.
+ */
 
-import { prettyPrint } from "./pretty"
+import { describe, expect, test } from "bun:test"
 
-// `prettyPrint` writes to both `console.table` (for the actual
-// box-drawing) and `console.log` (for header lines, section
-// labels, blank separators). These tests stub both so we can
-// assert on dispatch decisions without comparing rendered table
-// strings, which would brittle the suite against Node/Bun
-// upgrades changing their drawing characters.
+import { prettyFormat } from "./pretty"
 
-let tableCalls: unknown[]
-let logCalls: unknown[]
-let realConsoleTable: typeof console.table
-let realConsoleLog: typeof console.log
+describe("prettyFormat", () => {
+  test("array of flat objects → renders a single header + rows table", () => {
+    const out = prettyFormat([
+      { date: "2024-01-01", value: 1 },
+      { date: "2024-02-01", value: 2 },
+    ])
 
-beforeEach(() => {
-  tableCalls = []
-  logCalls = []
-  realConsoleTable = console.table.bind(console)
-  realConsoleLog = console.log.bind(console)
-
-  console.table = ((value: unknown) => {
-    tableCalls.push(value)
-  }) as typeof console.table
-
-  console.log = ((...args: unknown[]) => {
-    logCalls.push(args.length === 1 ? args[0] : args)
-  }) as typeof console.log
-})
-
-afterEach(() => {
-  console.table = realConsoleTable
-  console.log = realConsoleLog
-})
-
-describe("prettyPrint", () => {
-  test("array of flat objects → one console.table call", () => {
-    const rows = [{ date: "2024-01-01", value: 1 }, { date: "2024-02-01", value: 2 }]
-    prettyPrint(rows)
-    expect(tableCalls).toEqual([rows])
-    expect(logCalls).toEqual([])
+    expect(out).toMatch(/^┌.*┐\n/)
+    expect(out).toMatch(/└.*┘\n$/)
+    expect(out).toContain("date")
+    expect(out).toContain("2024-01-01")
+    expect(out).toContain("2024-02-01")
   })
 
-  test("array of primitives → one console.table call", () => {
-    prettyPrint([0.1, -0.1, 0.05])
-    expect(tableCalls).toEqual([[0.1, -0.1, 0.05]])
+  test("array of primitives → single-column table with index", () => {
+    const out = prettyFormat([0.1, -0.1, 0.05])
+    expect(out).toContain("Values")
+    expect(out).toContain("0.1")
+    expect(out).toContain("-0.1")
   })
 
-  test("flat object (all scalar values) → one console.table call", () => {
-    const obj = { id: "GDP", title: "Gross Domestic Product", frequency: "Quarterly" }
-    prettyPrint(obj)
-    expect(tableCalls).toEqual([obj])
-    expect(logCalls).toEqual([])
+  test("flat object → vertical key/value table", () => {
+    const out = prettyFormat({ id: "GDP", frequency: "Quarterly" })
+    expect(out).toContain("Values")
+    expect(out).toContain("GDP")
+    expect(out).toContain("Quarterly")
   })
 
-  test("map of flat records → one console.table call (combined)", () => {
-    const obj = {
+  test("map of flat records → single combined table with outer keys", () => {
+    const out = prettyFormat({
       SPY: { price: 739.17, change: 0.42 },
       QQQ: { price: 538.10, change: 0.31 },
-    }
-    prettyPrint(obj)
-    expect(tableCalls).toEqual([obj])
-    expect(logCalls).toEqual([])
+    })
+
+    expect(out).toContain("SPY")
+    expect(out).toContain("QQQ")
+    expect(out).toContain("price")
+    expect(out).toContain("change")
   })
 
-  test("mixed object (scalars + nested array) → header lines + sub-table", () => {
-    prettyPrint({
+  test("mixed object → header lines + labelled sub-tables, in insertion order", () => {
+    const out = prettyFormat({
       seriesId: "GDP",
       count: 2,
       observations: [
@@ -74,120 +63,92 @@ describe("prettyPrint", () => {
       ],
     })
 
-    // Header order is preserved: scalars first, then "observations:" label, then table.
-    expect(logCalls.slice(0, 3)).toEqual([
-      "seriesId: GDP",
-      "count: 2",
-      "",
-    ])
-    expect(logCalls).toContain("observations:")
-    expect(tableCalls).toEqual([[
-      { date: "2016-01-01", value: 1 },
-      { date: "2016-04-01", value: 2 },
-    ]])
+    expect(out).toContain("seriesId: GDP")
+    expect(out).toContain("count: 2")
+    expect(out).toContain("observations:")
+    expect(out.indexOf("observations:")).toBeGreaterThan(out.indexOf("seriesId: GDP"))
   })
 
   test("insertion order preserved when containers appear before scalars", () => {
-    prettyPrint({
+    const out = prettyFormat({
       meta: { symbol: "SPY", currency: "USD" },
       quotes: [{ date: "2024-01-02", close: 472.65 }],
     })
 
-    // First the "meta:" section, then the "quotes:" section.
-    const metaIdx = logCalls.indexOf("meta:")
-    const quotesIdx = logCalls.indexOf("quotes:")
-    expect(metaIdx).toBeGreaterThanOrEqual(0)
-    expect(quotesIdx).toBeGreaterThan(metaIdx)
-
-    // Both nested values went through console.table in that same order.
-    expect(tableCalls).toEqual([
-      { symbol: "SPY", currency: "USD" },
-      [{ date: "2024-01-02", close: 472.65 }],
-    ])
+    expect(out.indexOf("meta:")).toBeLessThan(out.indexOf("quotes:"))
+    expect(out).toContain("USD")
+    expect(out).toContain("472.65")
   })
 
   test("single-element primitive array → inlined as `key: value`", () => {
-    prettyPrint({
+    const out = prettyFormat({
       cik: "0000320193",
       tickers: ["AAPL"],
       filings: [{ form: "10-K" }],
     })
 
-    // `tickers` should join the scalar header, not get its own table.
-    expect(logCalls).toContain("tickers: AAPL")
-    // Single-row table still rendered for `filings`.
-    expect(tableCalls).toEqual([[{ form: "10-K" }]])
+    expect(out).toContain("tickers: AAPL")
+    expect(out).toContain("filings:")
+    expect(out).toContain("10-K")
   })
 
-  test("scalar value → console.log (no table)", () => {
-    prettyPrint("hello")
-    expect(logCalls).toEqual(["hello"])
-    expect(tableCalls).toEqual([])
+  test("scalar input → printed verbatim with a trailing newline", () => {
+    expect(prettyFormat("hello")).toBe("hello\n")
+    expect(prettyFormat(42)).toBe("42\n")
   })
 
-  test("array of non-flat objects → util.inspect fallback (console.log, no table)", () => {
-    prettyPrint([{ nested: { deep: 1 } }])
-    expect(tableCalls).toEqual([])
-    expect(logCalls.length).toBe(1)
-    expect(String(logCalls[0])).toContain("nested")
+  test("array of non-flat objects → util.inspect fallback", () => {
+    const out = prettyFormat([{ nested: { deep: 1 } }])
+    expect(out).not.toMatch(/^┌/)
+    expect(out).toContain("nested")
+    expect(out).toContain("deep")
   })
 
-  // --- string normalisation (truncate + newline marker) ---
+  // --- string normalisation ---
 
-  test("long string value → truncated with `… [+N chars]` marker", () => {
-    const long = "x".repeat(400)
-    prettyPrint({ ticker: "AAPL", description: long })
-
-    // Single console.table call; description truncated to fit.
-    expect(tableCalls.length).toBe(1)
-    const sent = tableCalls[0] as Record<string, string>
-    expect(sent.ticker).toBe("AAPL")
-    expect(sent.description?.length).toBeLessThan(long.length)
-    expect(sent.description).toMatch(/… \[\+\d+ chars\]$/)
-    expect(logCalls).toEqual([])
-  })
-
-  test("multi-line string → newlines collapsed to `⏎ ` marker (table intact)", () => {
-    prettyPrint({ ticker: "AAPL", body: "Item 1.\n\nBusiness\n\nApple Inc." })
-
-    expect(tableCalls.length).toBe(1)
-    const sent = tableCalls[0] as Record<string, string>
-    expect(sent.body).not.toContain("\n")
-    expect(sent.body).toContain("⏎")
-    expect(sent.body).toContain("Item 1.")
-    expect(sent.body).toContain("Business")
-  })
-
-  test("URL value gets truncated too (consistent with other long strings)", () => {
+  test("URL value → wrapped in OSC 8 hyperlink (full URL preserved)", () => {
     const url = "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm"
-    prettyPrint({ form: "10-K", url })
-
-    expect(tableCalls.length).toBe(1)
-    const sent = tableCalls[0] as Record<string, string>
-    expect(sent.form).toBe("10-K")
-    // Long URLs (>80 chars) get the same truncation treatment.
-    if (url.length > 80) {
-      expect(sent.url).toMatch(/… \[\+\d+ chars\]$/)
-    } else {
-      expect(sent.url).toBe(url)
-    }
+    const out = prettyFormat({ form: "10-K", url })
+    // OSC 8 opens with `\x1b]8;;<url>\x1b\\` and closes with `\x1b]8;;\x1b\\`.
+    expect(out).toContain("\x1b]8;;" + url + "\x1b\\")
+    expect(out).toContain("\x1b]8;;\x1b\\")
   })
 
-  test("short string with no special chars → stays untouched in the table", () => {
-    prettyPrint({ form: "10-K", filingDate: "2023-11-03" })
-    expect(tableCalls).toEqual([{ form: "10-K", filingDate: "2023-11-03" }])
-    expect(logCalls).toEqual([])
+  test("URL short enough → still hyperlinked, visible text equals URL", () => {
+    const url = "https://example.com/short"
+    const out = prettyFormat({ url })
+    expect(out).toContain("\x1b]8;;" + url + "\x1b\\" + url + "\x1b]8;;\x1b\\")
   })
 
-  test("long string in array-of-objects cell is also normalised", () => {
-    prettyPrint([
+  test("multi-line string → newlines collapsed to ⏎ marker (table intact)", () => {
+    const out = prettyFormat({ ticker: "AAPL", body: "Item 1.\n\nBusiness\n\nApple Inc." })
+    const bodyLine = out.split("\n").find((line) => line.includes("Item 1.")) ?? ""
+    expect(bodyLine).toContain("⏎")
+    expect(bodyLine).toContain("Business")
+  })
+
+  test("long single-line string → truncated with `… [+N chars]` marker", () => {
+    const long = "x".repeat(400)
+    const out = prettyFormat({ ticker: "AAPL", description: long })
+    expect(out).toMatch(/… \[\+\d+ chars\]/)
+    expect(out).not.toContain(long)
+  })
+
+  test("short string with no special chars → stays untouched", () => {
+    const out = prettyFormat({ form: "10-K", filingDate: "2023-11-03" })
+    expect(out).toContain("10-K")
+    expect(out).toContain("2023-11-03")
+    expect(out).not.toMatch(/\[\+\d+ chars\]/)
+    expect(out).not.toContain("\x1b")
+  })
+
+  test("long string in array-of-objects cell is also truncated", () => {
+    const out = prettyFormat([
       { ticker: "AAPL", note: "x".repeat(400) },
       { ticker: "MSFT", note: "short" },
     ])
 
-    expect(tableCalls.length).toBe(1)
-    const rows = tableCalls[0] as Record<string, string>[]
-    expect(rows[0]!.note).toMatch(/… \[\+\d+ chars\]$/)
-    expect(rows[1]!.note).toBe("short")
+    expect(out).toMatch(/… \[\+\d+ chars\]/)
+    expect(out).toContain("short")
   })
 })

@@ -20,10 +20,10 @@ exports[`prettyPrint — rendered snapshots FRED meta (flat object) 1`] = `
 "┌──────────────────┬────────────────────────┐
 │                  │ Values                 │
 ├──────────────────┼────────────────────────┤
-│               id │ GDP                    │
-│            title │ Gross Domestic Product │
-│        frequency │ Quarterly              │
-│            units │ Billions of Dollars    │
+│ id               │ GDP                    │
+│ title            │ Gross Domestic Product │
+│ frequency        │ Quarterly              │
+│ units            │ Billions of Dollars    │
 │ observationStart │ 1947-01-01             │
 └──────────────────┴────────────────────────┘
 "
@@ -45,8 +45,8 @@ exports[`prettyPrint — rendered snapshots yahoo chart (meta first, quotes seco
 ┌────────────────────┬────────┐
 │                    │ Values │
 ├────────────────────┼────────┤
-│             symbol │ SPY    │
-│           currency │ USD    │
+│ symbol             │ SPY    │
+│ currency           │ USD    │
 │ regularMarketPrice │ 739.17 │
 └────────────────────┴────────┘
 
@@ -92,16 +92,16 @@ exports[`prettyPrint — rendered snapshots market-stats drawdown (scalars trail
 ┌───────┬────────┐
 │       │ Values │
 ├───────┼────────┤
-│     i │ 4      │
+│ i     │ 4      │
 │ price │ 95     │
-│    dd │ -0.05  │
+│ dd    │ -0.05  │
 └───────┴────────┘
 
 max:
 ┌────┬────────┐
 │    │ Values │
 ├────┼────────┤
-│  i │ 3      │
+│ i  │ 3      │
 │ dd │ -0.3   │
 └────┴────────┘
 
@@ -120,8 +120,8 @@ items:
 ┌───┬────────────┬─────────────┬──────────────────────┐
 │   │ title      │ link        │ pubDate              │
 ├───┼────────────┼─────────────┼──────────────────────┤
-│ 0 │ Headline A │ https://... │ 2026-05-19T11:00:00Z │
-│ 1 │ Headline B │ https://... │ 2026-05-18T11:00:00Z │
+│ 0 │ Headline A │ \x1B]8;;https://...\x1B\\https://...\x1B]8;;\x1B\\ │ 2026-05-19T11:00:00Z │
+│ 1 │ Headline B │ \x1B]8;;https://...\x1B\\https://...\x1B]8;;\x1B\\ │ 2026-05-18T11:00:00Z │
 └───┴────────────┴─────────────┴──────────────────────┘
 
 "
@@ -138,13 +138,13 @@ exports[`prettyPrint — rendered snapshots edgar-filings read (long body + long
 "┌────────────┬──────────────────────────────────────────────────────────────────────────────────┐
 │            │ Values                                                                           │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────┤
-│     ticker │ AAPL                                                                             │
-│  accession │ 0000320193-23-000106                                                             │
-│        url │ https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/… [+17 chars]  │
-│       form │ 10-K                                                                             │
+│ ticker     │ AAPL                                                                             │
+│ accession  │ 0000320193-23-000106                                                             │
+│ url        │ \x1B]8;;https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm\x1B\\https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/… [+17 chars]\x1B]8;;\x1B\\  │
+│ form       │ 10-K                                                                             │
 │ filingDate │ 2023-11-03                                                                       │
-│        raw │ false                                                                            │
-│       body │ Item 1. ⏎ Business ⏎ Apple Inc., designs, manufactures, and market… [+277 chars] │
+│ raw        │ false                                                                            │
+│ body       │ Item 1. ⏎ Business ⏎ Apple Inc., designs, manufactures, and market… [+282 chars] │
 └────────────┴──────────────────────────────────────────────────────────────────────────────────┘
 "
 `;
