@@ -1,0 +1,135 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`prettyPrint — rendered snapshots FRED observations (mixed: scalars + nested array) 1`] = `
+"seriesId: GDP
+count: 3
+
+observations:
+┌───┬────────────┬───────────┐
+│   │ date       │ value     │
+├───┼────────────┼───────────┤
+│ 0 │ 2016-01-01 │ 18525.933 │
+│ 1 │ 2016-04-01 │ 18711.702 │
+│ 2 │ 2016-07-01 │ 18892.639 │
+└───┴────────────┴───────────┘
+
+"
+`;
+
+exports[`prettyPrint — rendered snapshots FRED meta (flat object) 1`] = `
+"┌──────────────────┬────────────────────────┐
+│                  │ Values                 │
+├──────────────────┼────────────────────────┤
+│               id │ GDP                    │
+│            title │ Gross Domestic Product │
+│        frequency │ Quarterly              │
+│            units │ Billions of Dollars    │
+│ observationStart │ 1947-01-01             │
+└──────────────────┴────────────────────────┘
+"
+`;
+
+exports[`prettyPrint — rendered snapshots market-stats returns (primitive array) 1`] = `
+"┌───┬────────┐
+│   │ Values │
+├───┼────────┤
+│ 0 │ 0.1    │
+│ 1 │ -0.1   │
+│ 2 │ 0.05   │
+└───┴────────┘
+"
+`;
+
+exports[`prettyPrint — rendered snapshots yahoo chart (meta first, quotes second — insertion order) 1`] = `
+"meta:
+┌────────────────────┬────────┐
+│                    │ Values │
+├────────────────────┼────────┤
+│             symbol │ SPY    │
+│           currency │ USD    │
+│ regularMarketPrice │ 739.17 │
+└────────────────────┴────────┘
+
+quotes:
+┌───┬────────────┬────────┬────────┐
+│   │ date       │ open   │ close  │
+├───┼────────────┼────────┼────────┤
+│ 0 │ 2024-01-02 │ 472.16 │ 472.65 │
+│ 1 │ 2024-01-03 │ 470.43 │ 468.79 │
+└───┴────────────┴────────┴────────┘
+
+"
+`;
+
+exports[`prettyPrint — rendered snapshots edgar filings list (single-element tickers inlined as scalar) 1`] = `
+"cik: 0000320193
+name: Apple Inc.
+tickers: AAPL
+
+filings:
+┌───┬──────┬────────────┬──────────────────────┐
+│   │ form │ filingDate │ accessionNumber      │
+├───┼──────┼────────────┼──────────────────────┤
+│ 0 │ 10-K │ 2025-10-31 │ 0000320193-25-000079 │
+│ 1 │ 10-Q │ 2026-01-30 │ 0000320193-26-000010 │
+└───┴──────┴────────────┴──────────────────────┘
+
+"
+`;
+
+exports[`prettyPrint — rendered snapshots yahoo multi-quote (map of flat records → single combined table) 1`] = `
+"┌─────┬────────────────────┬────────────────────────────┐
+│     │ regularMarketPrice │ regularMarketChangePercent │
+├─────┼────────────────────┼────────────────────────────┤
+│ SPY │ 739.17             │ 0.42                       │
+│ QQQ │ 538.1              │ 0.31                       │
+└─────┴────────────────────┴────────────────────────────┘
+"
+`;
+
+exports[`prettyPrint — rendered snapshots market-stats drawdown (scalars trail nested objects) 1`] = `
+"current:
+┌───────┬────────┐
+│       │ Values │
+├───────┼────────┤
+│     i │ 4      │
+│ price │ 95     │
+│    dd │ -0.05  │
+└───────┴────────┘
+
+max:
+┌────┬────────┐
+│    │ Values │
+├────┼────────┤
+│  i │ 3      │
+│ dd │ -0.3   │
+└────┴────────┘
+
+peakIdx: 0
+recoveryIdx: null
+
+"
+`;
+
+exports[`prettyPrint — rendered snapshots rss-feeds fetch (scalars + items array) 1`] = `
+"kind: rss
+title: Press Releases
+link: https://www.sec.gov/
+
+items:
+┌───┬────────────┬─────────────┬──────────────────────┐
+│   │ title      │ link        │ pubDate              │
+├───┼────────────┼─────────────┼──────────────────────┤
+│ 0 │ Headline A │ https://... │ 2026-05-19T11:00:00Z │
+│ 1 │ Headline B │ https://... │ 2026-05-18T11:00:00Z │
+└───┴────────────┴─────────────┴──────────────────────┘
+
+"
+`;
+
+exports[`prettyPrint — rendered snapshots array of non-flat objects (util.inspect fallback) 1`] = `
+"[
+  { nested: { deep: 1, deeper: { x: 42 } } }
+]
+"
+`;
