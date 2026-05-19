@@ -131,4 +131,63 @@ describe("prettyPrint", () => {
     expect(logCalls.length).toBe(1)
     expect(String(logCalls[0])).toContain("nested")
   })
+
+  // --- string normalisation (truncate + newline marker) ---
+
+  test("long string value → truncated with `… [+N chars]` marker", () => {
+    const long = "x".repeat(400)
+    prettyPrint({ ticker: "AAPL", description: long })
+
+    // Single console.table call; description truncated to fit.
+    expect(tableCalls.length).toBe(1)
+    const sent = tableCalls[0] as Record<string, string>
+    expect(sent.ticker).toBe("AAPL")
+    expect(sent.description?.length).toBeLessThan(long.length)
+    expect(sent.description).toMatch(/… \[\+\d+ chars\]$/)
+    expect(logCalls).toEqual([])
+  })
+
+  test("multi-line string → newlines collapsed to `⏎ ` marker (table intact)", () => {
+    prettyPrint({ ticker: "AAPL", body: "Item 1.\n\nBusiness\n\nApple Inc." })
+
+    expect(tableCalls.length).toBe(1)
+    const sent = tableCalls[0] as Record<string, string>
+    expect(sent.body).not.toContain("\n")
+    expect(sent.body).toContain("⏎")
+    expect(sent.body).toContain("Item 1.")
+    expect(sent.body).toContain("Business")
+  })
+
+  test("URL value gets truncated too (consistent with other long strings)", () => {
+    const url = "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm"
+    prettyPrint({ form: "10-K", url })
+
+    expect(tableCalls.length).toBe(1)
+    const sent = tableCalls[0] as Record<string, string>
+    expect(sent.form).toBe("10-K")
+    // Long URLs (>80 chars) get the same truncation treatment.
+    if (url.length > 80) {
+      expect(sent.url).toMatch(/… \[\+\d+ chars\]$/)
+    } else {
+      expect(sent.url).toBe(url)
+    }
+  })
+
+  test("short string with no special chars → stays untouched in the table", () => {
+    prettyPrint({ form: "10-K", filingDate: "2023-11-03" })
+    expect(tableCalls).toEqual([{ form: "10-K", filingDate: "2023-11-03" }])
+    expect(logCalls).toEqual([])
+  })
+
+  test("long string in array-of-objects cell is also normalised", () => {
+    prettyPrint([
+      { ticker: "AAPL", note: "x".repeat(400) },
+      { ticker: "MSFT", note: "short" },
+    ])
+
+    expect(tableCalls.length).toBe(1)
+    const rows = tableCalls[0] as Record<string, string>[]
+    expect(rows[0]!.note).toMatch(/… \[\+\d+ chars\]$/)
+    expect(rows[1]!.note).toBe("short")
+  })
 })

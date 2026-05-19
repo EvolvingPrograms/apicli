@@ -133,3 +133,18 @@ exports[`prettyPrint — rendered snapshots array of non-flat objects (util.insp
 ]
 "
 `;
+
+exports[`prettyPrint — rendered snapshots edgar-filings read (long body + long URL, the original repro) 1`] = `
+"┌────────────┬──────────────────────────────────────────────────────────────────────────────────┐
+│            │ Values                                                                           │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+│     ticker │ AAPL                                                                             │
+│  accession │ 0000320193-23-000106                                                             │
+│        url │ https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/… [+17 chars]  │
+│       form │ 10-K                                                                             │
+│ filingDate │ 2023-11-03                                                                       │
+│        raw │ false                                                                            │
+│       body │ Item 1. ⏎ Business ⏎ Apple Inc., designs, manufactures, and market… [+277 chars] │
+└────────────┴──────────────────────────────────────────────────────────────────────────────────┘
+"
+`;

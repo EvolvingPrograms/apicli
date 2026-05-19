@@ -149,4 +149,24 @@ describe("prettyPrint — rendered snapshots", () => {
     const out = await render([{ nested: { deep: 1, deeper: { x: 42 } } }])
     expect(out).toMatchSnapshot()
   })
+
+  // edgar-filings `read` returns a flat object whose `body` is a
+  // multi-paragraph string and `url` is a long single line. Pre-fix
+  // this rendered as a single console.table cell stretching far
+  // past the terminal width with literal `\n` chars breaking row
+  // alignment. After the fix: newlines collapse to `⏎ `, long
+  // values truncate inline, table integrity preserved.
+  test("edgar-filings read (long body + long URL, the original repro)", async () => {
+    const out = await render({
+      ticker: "AAPL",
+      accession: "0000320193-23-000106",
+      url: "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+      form: "10-K",
+      filingDate: "2023-11-03",
+      raw: false,
+      body: "Item 1.\n\nBusiness\n\nApple Inc., designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, Mac, iPad, AirPods, Apple TV, Apple Watch, Beats products, HomePod, iPod touch, and accessories.\n\nItem 1A.\n\nRisk Factors\n\nThe Company is subject to a variety of risks ...",
+    })
+
+    expect(out).toMatchSnapshot()
+  })
 })

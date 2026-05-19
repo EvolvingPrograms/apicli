@@ -17,6 +17,10 @@
  *                                             insertion order preserved
  *   - single-element primitive array        → inlined as `key: value`
  *     (avoids the noisy 2-column table)
+ *   - long string cells                     → truncated with `… [+N chars]`
+ *     so a 400-char description doesn't stretch a column across the
+ *     whole terminal; newlines collapse to a `⏎ ` marker so they
+ *     don't break row alignment
  *   - anything still deeply nested at a leaf → `util.inspect(depth: 3)`
  *
  * The output is plain text on stdout. No colour, no TTY detection —
@@ -47,11 +51,68 @@ function isMapOfFlatRecords(v: Record<string, unknown>): boolean {
   return vals.length > 0 && vals.every(isFlatObject)
 }
 
+// Two failure modes for string values inside `console.table`:
+//
+//   1. Newlines render literally, breaking row alignment — the
+//      right border drifts to wrap each line.
+//   2. Very long single-line strings stretch a column across the
+//      whole terminal, even when the value isn't load-bearing.
+//
+// We normalise each string before it hits `console.table`:
+//
+//   - newlines collapse to a visible `⏎ ` marker so the cell
+//     stays single-line and the table's row alignment survives;
+//   - anything over MAX_INLINE_LENGTH is truncated with a
+//     `… [+N chars]` tail.
+//
+// Truncating URLs is a known tradeoff — the alternative (rendering
+// them out-of-line below the table) split the output into two
+// sections and read worse for the common case. If a user needs
+// the full URL or body content, they can re-run with `--json`.
+const MAX_INLINE_LENGTH = 80
+const NEWLINE_MARKER = " ⏎ "
+
+function normaliseForTable(v: unknown): unknown {
+  if (typeof v !== "string") return v
+  const flat = v.includes("\n") ? v.replaceAll(/\n+/g, NEWLINE_MARKER) : v
+  if (flat.length <= MAX_INLINE_LENGTH) return flat
+  // Reserve ~14 chars for the ` … [+N chars]` marker so the cell
+  // never exceeds MAX_INLINE_LENGTH overall.
+  const head = flat.slice(0, MAX_INLINE_LENGTH - 14).trimEnd()
+  return `${head}… [+${v.length - head.length} chars]`
+}
+
+function normaliseObjectForTable(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = normaliseForTable(v)
+  }
+
+  return out
+}
+
+function normaliseArrayForTable(arr: unknown[]): unknown[] {
+  return arr.map((item) =>
+    isPlainObject(item) ? normaliseObjectForTable(item) : normaliseForTable(item),
+  )
+}
+
+function normaliseMapForTable(
+  obj: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = normaliseObjectForTable(v as Record<string, unknown>)
+  }
+
+  return out
+}
+
 export function prettyPrint(value: unknown): void {
   // Top-level arrays and primitives.
   if (Array.isArray(value)) {
     if (isFlatArray(value)) {
-      console.table(value)
+      console.table(normaliseArrayForTable(value))
     } else {
       console.log(inspect(value, { depth: 4, colors: false }))
     }
@@ -66,12 +127,12 @@ export function prettyPrint(value: unknown): void {
 
   // Whole-object shortcuts.
   if (Object.values(value).every(isScalar)) {
-    console.table(value)
+    console.table(normaliseObjectForTable(value))
     return
   }
 
   if (isMapOfFlatRecords(value)) {
-    console.table(value)
+    console.table(normaliseMapForTable(value))
     return
   }
 
@@ -107,13 +168,15 @@ export function prettyPrint(value: unknown): void {
 
     if (Array.isArray(v)) {
       if (isFlatArray(v)) {
-        console.table(v)
+        console.table(normaliseArrayForTable(v))
       } else {
         console.log(inspect(v, { depth: 3, colors: false }))
       }
     } else if (isPlainObject(v)) {
-      if (isFlatObject(v) || isMapOfFlatRecords(v)) {
-        console.table(v)
+      if (isFlatObject(v)) {
+        console.table(normaliseObjectForTable(v))
+      } else if (isMapOfFlatRecords(v)) {
+        console.table(normaliseMapForTable(v))
       } else {
         console.log(inspect(v, { depth: 3, colors: false }))
       }
