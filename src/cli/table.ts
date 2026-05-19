@@ -26,58 +26,13 @@
 
 import stringWidth from "string-width"
 
+import { bold, colorize } from "./ansi"
+
 const BOX = {
   top: { l: "┌", r: "┐", x: "┬", h: "─" },
   mid: { l: "├", r: "┤", x: "┼", h: "─" },
   bot: { l: "└", r: "┘", x: "┴", h: "─" },
   v: "│",
-}
-
-// ----- color -----------------------------------------------------------------
-//
-// Type-aware coloring for cell contents, gated on `process.stdout.isTTY`.
-// Mirrors the conventions a developer would recognise from `jq -C`, Bun's
-// own `console.table`, and most syntax-highlighted REPLs: dates in cyan,
-// numbers in yellow, booleans in magenta, null/blank dimmed, strings
-// default. Coloring never widens a cell — `stringWidth` strips ANSI
-// before measuring.
-
-const ANSI = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  dim: "\x1b[2m",
-  yellow: "\x1b[33m",
-  cyan: "\x1b[36m",
-  magenta: "\x1b[35m",
-  gray: "\x1b[90m",
-}
-
-function bold(s: string): string {
-  if (!colorEnabled() || s === "") return s
-  return ANSI.bold + s + ANSI.reset
-}
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.+\-Z]+)?$/
-const NUMBER_RE = /^-?\d+(\.\d+)?$/
-
-function colorEnabled(): boolean {
-  // `NO_COLOR` wins (https://no-color.org). `FORCE_COLOR` opts in even
-  // when piped — useful for `--pretty | less -R`. Otherwise: TTY only.
-  if (process.env.NO_COLOR) return false
-  if (process.env.FORCE_COLOR) return true
-  return Boolean(process.stdout.isTTY)
-}
-
-function colorize(cell: string): string {
-  if (!colorEnabled() || cell === "") return cell
-  if (cell === "null") return ANSI.gray + cell + ANSI.reset
-  if (cell === "true" || cell === "false") {
-    return ANSI.magenta + cell + ANSI.reset
-  }
-
-  if (DATE_RE.test(cell)) return ANSI.cyan + cell + ANSI.reset
-  if (NUMBER_RE.test(cell)) return ANSI.yellow + cell + ANSI.reset
-  return cell
 }
 
 function pad(content: string, width: number): string {

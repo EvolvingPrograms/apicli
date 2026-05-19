@@ -155,6 +155,13 @@ describe("createCli — command dispatch", () => {
     expect(stdout.join("")).toBe(`{"ok":true}\n`)
   })
 
+  // Help output now wraps terms in bold and descriptions in dim
+  // ANSI escapes (FORCE_COLOR=1 in the test setup). Strip the
+  // escapes before asserting so the tests still target the
+  // (default) marker on the right flag.
+  // eslint-disable-next-line no-control-regex
+  const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "")
+
   test("--help marks --pretty as (default) when no env override is set", () => {
     const prevJson = process.env.JSON
     const prevPretty = process.env.PRETTY
@@ -162,7 +169,7 @@ describe("createCli — command dispatch", () => {
     delete process.env.PRETTY
     try {
       const cli = createCli({ name: "test-cli", description: "test", commands: [] })
-      const help = cli.program.helpInformation()
+      const help = stripAnsi(cli.program.helpInformation())
       expect(help).toMatch(/--pretty\s+Emit a formatted table \(default\)\./)
       expect(help).toMatch(/--json\s+Emit raw JSON\./)
       expect(help).not.toContain("Emit raw JSON (default).")
@@ -179,7 +186,7 @@ describe("createCli — command dispatch", () => {
     delete process.env.PRETTY
     try {
       const cli = createCli({ name: "test-cli", description: "test", commands: [] })
-      const help = cli.program.helpInformation()
+      const help = stripAnsi(cli.program.helpInformation())
       expect(help).toMatch(/--json\s+Emit raw JSON \(default\)\./)
       expect(help).toMatch(/--pretty\s+Emit a formatted table\./)
       expect(help).not.toContain("Emit a formatted table (default).")
@@ -188,6 +195,71 @@ describe("createCli — command dispatch", () => {
       else delete process.env.JSON
       if (prevPretty !== undefined) process.env.PRETTY = prevPretty
     }
+  })
+
+  // --- help styling + commander pass-through ---
+
+  test("--help applies the default styling (bold titles, dim descriptions)", () => {
+    const cli = createCli({ name: "test-cli", description: "test desc", commands: [] })
+    const help = cli.program.helpInformation()
+    // Bold around section titles like "Usage:" and "Options:".
+    expect(help).toContain("\x1b[1mUsage:\x1b[0m")
+    expect(help).toContain("\x1b[1mOptions:\x1b[0m")
+    // Dim around description text.
+    // eslint-disable-next-line no-control-regex
+    expect(help).toMatch(/\x1b\[2m.*Emit raw JSON.*\x1b\[0m/)
+  })
+
+  test("caller's styleTitle wins over the default (per-property merge)", () => {
+    const cli = createCli({
+      name: "test-cli",
+      description: "test",
+      commands: [],
+      commander: {
+        configureHelp: { styleTitle: (s) => `<<${s}>>` },
+      },
+    })
+
+    const help = cli.program.helpInformation()
+    // Caller's override applies.
+    expect(help).toContain("<<Usage:>>")
+    expect(help).toContain("<<Options:>>")
+    // Other defaults (e.g. dim descriptions) still apply because
+    // the merge is per-property, not wholesale.
+    // eslint-disable-next-line no-control-regex
+    expect(help).toMatch(/\x1b\[2m.*Emit raw JSON.*\x1b\[0m/)
+  })
+
+  test("commander.exitOverride=true makes parse errors throw instead of exit", () => {
+    const cli = createCli({
+      name: "test-cli",
+      description: "test",
+      commands: [],
+      commander: { exitOverride: true },
+    })
+
+    expect(() => cli.program.parse(["bun", "test-cli", "--bogus"])).toThrow()
+    // Without exitOverride, commander would have called process.exit
+    // (which our test stub catches as __exit_…). With it, a
+    // CommanderError propagates instead.
+  })
+
+  test("commander.allowUnknownOption silences unknown-flag errors", () => {
+    const cli = createCli({
+      name: "test-cli",
+      description: "test",
+      commands: [],
+      commander: {
+        exitOverride: true,
+        allowUnknownOption: true,
+        allowExcessArguments: true,
+      },
+    })
+
+    // Without `allowUnknownOption` + `allowExcessArguments` this
+    // throws (unknown flag, then extra positional). With both, parse
+    // succeeds and the program ignores the noise.
+    expect(() => cli.program.parse(["bun", "test-cli", "--bogus", "v"])).not.toThrow()
   })
 
   test("passing `api` adds the auto-generated `api <endpoint>` subcommand tree", () => {

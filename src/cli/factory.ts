@@ -6,14 +6,60 @@
  */
 
 import { Command } from "commander"
+import type { HelpConfiguration } from "commander"
+
 import { addApiCli } from "../api/cli"
-import type { Cli, CreateCliOptions, StoredCommand } from "../types"
+import type { Cli, CommanderOptions, CreateCliOptions, StoredCommand } from "../types"
+import { bold, dim, italic } from "./ansi"
 import type { EmitMode } from "./emit"
 import { emit, mapError, resolveDefaultMode } from "./emit"
 import { collectArgs, walkSchemaToCommander } from "./walker"
 
+/**
+ * Default help-styling hooks. Section titles ("Usage:",
+ * "Options:") render bold; the body text of descriptions
+ * dims; command names render in italic. Caller-provided
+ * style hooks merge per-property over these defaults.
+ */
+const DEFAULT_HELP_STYLE: HelpConfiguration = {
+  styleTitle: (s) => bold(s),
+  styleCommandText: (s) => italic(s),
+  styleOptionTerm: (s) => bold(s),
+  styleSubcommandTerm: (s) => bold(s),
+  styleArgumentTerm: (s) => bold(s),
+  styleDescriptionText: (s) => dim(s),
+}
+
+function applyCommanderOptions(
+  program: Command,
+  opts: CommanderOptions | undefined,
+): void {
+  // Always apply our default help styling. Caller's style hooks
+  // override per-property — granular wins over wholesale.
+  const help: HelpConfiguration = {
+    ...DEFAULT_HELP_STYLE,
+    ...(opts?.configureHelp ?? {}),
+  }
+
+  program.configureHelp(help)
+
+  if (opts?.configureOutput) program.configureOutput(opts.configureOutput)
+  if (opts?.exitOverride === true) program.exitOverride()
+  else if (typeof opts?.exitOverride === "function") program.exitOverride(opts.exitOverride)
+  if (opts?.helpOption !== undefined) {
+    if (opts.helpOption === false) program.helpOption(false)
+    else program.helpOption(...opts.helpOption)
+  }
+
+  if (opts?.showHelpAfterError !== undefined) program.showHelpAfterError(opts.showHelpAfterError)
+  if (opts?.allowUnknownOption) program.allowUnknownOption()
+  if (opts?.allowExcessArguments) program.allowExcessArguments()
+}
+
 export function createCli(opts: CreateCliOptions): Cli {
   const program = new Command().name(opts.name).description(opts.description)
+
+  applyCommanderOptions(program, opts.commander)
 
   // Program-level output mode flags. Default is `pretty` (a
   // formatted table via `console.table`); `--json` opts out into

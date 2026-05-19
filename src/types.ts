@@ -9,7 +9,12 @@
  * uniformly.
  */
 
-import type { Command } from "commander"
+import type {
+  Command,
+  CommanderError,
+  HelpConfiguration,
+  OutputConfiguration,
+} from "commander"
 import type { z } from "zod"
 
 // ===========================================================================
@@ -227,6 +232,42 @@ export type CommandFn<S extends z.ZodObject, R>
     & StoredCommand
     & { readonly def: CommandDef<S, R> }
 
+/**
+ * Subset of Commander's setter API that callers can override on
+ * `createCli({ commander })`. Each field maps 1:1 to a method on
+ * the underlying `Command`:
+ *
+ *   - `configureHelp` → `program.configureHelp(value)`
+ *   - `configureOutput` → `program.configureOutput(value)`
+ *   - `exitOverride` → `program.exitOverride(value)`
+ *   - `helpOption` → `program.helpOption(...args)`
+ *   - `showHelpAfterError` → `program.showHelpAfterError(value)`
+ *   - `allowUnknownOption` → `program.allowUnknownOption(value)`
+ *   - `allowExcessArguments` → `program.allowExcessArguments(value)`
+ *
+ * For `configureHelp` specifically, clipi merges the caller's
+ * style hooks with its defaults on a per-property basis — so
+ * passing `{ configureHelp: { styleTitle: x => x } }` overrides
+ * only `styleTitle` and leaves the other style hooks in place.
+ *
+ * Each option is optional. When absent, clipi's defaults apply.
+ */
+export interface CommanderOptions {
+  configureHelp?: HelpConfiguration
+  configureOutput?: OutputConfiguration
+  /**
+   * `true` → call `program.exitOverride()` with no args (throws
+   * a `CommanderError` instead of calling `process.exit`).
+   * Function → forwarded as the callback.
+   */
+  exitOverride?: true | ((err: CommanderError) => never | void)
+  /** Args forwarded to `program.helpOption(...)`. */
+  helpOption?: [string, string?] | false
+  showHelpAfterError?: boolean | string
+  allowUnknownOption?: boolean
+  allowExcessArguments?: boolean
+}
+
 export interface CreateCliOptions {
   name: string
   description: string
@@ -236,6 +277,16 @@ export interface CreateCliOptions {
   api?: StoredApi
   /** Error class. Thrown instances get mapped to `name: <msg>` + exit 1. */
   errorClass?: new (msg: string) => Error
+  /**
+   * Pass-through configuration applied to the underlying
+   * Commander program. Each field maps to a Commander setter
+   * method. Clipi's defaults (notably a styled `configureHelp`)
+   * apply when fields are absent; caller-provided values
+   * override on a per-property basis where it makes sense.
+   *
+   * See {@link CommanderOptions} for the supported fields.
+   */
+  commander?: CommanderOptions
 }
 
 export interface Cli {
