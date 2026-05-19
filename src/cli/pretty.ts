@@ -72,11 +72,15 @@ function isMapOfFlatRecords(v: Record<string, unknown>): boolean {
 // We normalise each table-bound string accordingly:
 //
 //   - URL-shaped values → truncated visible text wrapped in
-//     OSC 8 hyperlink to the full URL.
+//     OSC 8 hyperlink to the full URL. The hyperlink IS the
+//     full URL, so we don't append `[+N chars]` — clicking the
+//     visible text opens the real address.
 //   - Newlines collapse to a `⏎ ` marker so the cell stays
 //     single-line.
 //   - Anything over MAX_INLINE_LENGTH (and not a URL) is
-//     truncated with a `… [+N chars]` tail.
+//     truncated with a `… [+N chars]` tail, where N is formatted
+//     compactly (e.g. `196k` rather than `196617`) so the cell
+//     stays scannable.
 //
 // Width measurement uses `string-width` from our own
 // `./table` module, which correctly strips OSC 8 + SGR before
@@ -85,23 +89,38 @@ function isMapOfFlatRecords(v: Record<string, unknown>): boolean {
 const MAX_INLINE_LENGTH = 80
 const NEWLINE_MARKER = " ⏎ "
 
+const COMPACT_NUMBER = new Intl.NumberFormat("en", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+})
+
+function compact(n: number): string {
+  // Lowercase suffix (`k`/`m`/`b`) — feels less shouty than the
+  // default uppercase, and matches casual chat conventions.
+  return COMPACT_NUMBER.format(n).toLowerCase()
+}
+
 function isUrl(v: string): boolean {
   return /^https?:\/\//.test(v)
 }
 
 function truncateVisible(s: string, max: number): string {
   if (s.length <= max) return s
+  // Reserve ~14 chars for the ` … [+Nk chars]` marker so the cell
+  // never exceeds `max` overall.
   const head = s.slice(0, max - 14).trimEnd()
-  return `${head}… [+${s.length - head.length} chars]`
+  return `${head}… [+${compact(s.length - head.length)} chars]`
 }
 
 function normaliseForTable(v: unknown): unknown {
   if (typeof v !== "string") return v
-  // URLs: keep clickable via OSC 8, truncate the visible text
-  // so the column doesn't stretch across the terminal.
+  // URLs: wrap in OSC 8. When the URL fits, the visible text is
+  // the full URL; when it doesn't, the visible text is truncated
+  // (without the `[+N chars]` marker — the hyperlink already IS
+  // the full URL, so the marker would be redundant noise).
   if (isUrl(v)) {
     if (v.length <= MAX_INLINE_LENGTH) return hyperlink(v, v)
-    const visible = truncateVisible(v, MAX_INLINE_LENGTH)
+    const visible = v.slice(0, MAX_INLINE_LENGTH - 1).trimEnd() + "…"
     return hyperlink(v, visible)
   }
 

@@ -20,7 +20,7 @@ import {
 describe("renderObjectTable", () => {
   test("flat key/value object → 2-column vertical table", () => {
     const out = renderObjectTable({ id: "GDP", frequency: "Quarterly" })
-    expect(out).toContain("Values")
+    expect(out).toContain("Value")
     expect(out).toContain("id")
     expect(out).toContain("frequency")
     expect(out).toContain("GDP")
@@ -30,7 +30,7 @@ describe("renderObjectTable", () => {
 
   test("empty object → just header rows (no body)", () => {
     const out = renderObjectTable({})
-    expect(out).toContain("│  │ Values │")
+    expect(out).toContain("Value")
     // Body section between header and bottom border is empty.
     expect(out.split("\n")).toHaveLength(5) // top, header, sep, bottom, ""
   })
@@ -51,7 +51,7 @@ describe("renderArrayTable", () => {
 
   test("array of primitives → single Values column", () => {
     const out = renderArrayTable([0.1, -0.1, 0.05])
-    expect(out).toContain("Values")
+    expect(out).toContain("Value")
     expect(out).toContain("0.1")
     expect(out).toContain("-0.1")
     expect(out).toContain("0.05")
@@ -63,8 +63,11 @@ describe("renderArrayTable", () => {
       { a: 1, b: 2 },
       { a: 3, c: 4 },
     ])
-    // Union: a, b, c — first-seen order. Blank where missing.
-    expect(out).toContain("│ a │ b │ c │")
+    // Union: a, b, c — first-seen order. Headers + label column are
+    // bold; the snapshot pins the exact escape sequencing.
+    expect(out).toContain("a")
+    expect(out).toContain("b")
+    expect(out).toContain("c")
     expect(out).toMatchSnapshot()
   })
 
@@ -98,10 +101,14 @@ describe("type-aware coloring", () => {
     expect(out).toContain("\x1b[33m42.5\x1b[0m")
   })
 
-  test("the auto-index column stays uncolored even though it's numeric", () => {
+  test("the auto-index column gets bold (label) not yellow (number)", () => {
     const out = renderArrayTable([{ n: 7 }, { n: 8 }])
-    expect(out).toContain("│ 0 │")
-    expect(out).toContain("│ 1 │")
+    // Index column: bold, not yellow.
+    expect(out).toContain("\x1b[1m0\x1b[0m")
+    expect(out).toContain("\x1b[1m1\x1b[0m")
+    expect(out).not.toContain("\x1b[33m0\x1b[0m")
+    expect(out).not.toContain("\x1b[33m1\x1b[0m")
+    // Data column: yellow, not bold.
     expect(out).toContain("\x1b[33m7\x1b[0m")
     expect(out).toContain("\x1b[33m8\x1b[0m")
   })
@@ -112,10 +119,12 @@ describe("type-aware coloring", () => {
     expect(out).toContain("\x1b[90mnull\x1b[0m")
   })
 
-  test("renderObjectTable colors the Values column, not the keys", () => {
+  test("renderObjectTable bolds the key column, type-colors the value column", () => {
     const out = renderObjectTable({ date: "2024-01-01", n: 42 })
-    expect(out).toContain("│ date ")
-    expect(out).toContain("│ n    ")
+    // Keys: bold.
+    expect(out).toContain("\x1b[1mdate\x1b[0m")
+    expect(out).toContain("\x1b[1mn\x1b[0m")
+    // Values: type-colored.
     expect(out).toContain("\x1b[36m2024-01-01\x1b[0m")
     expect(out).toContain("\x1b[33m42\x1b[0m")
   })
@@ -140,7 +149,7 @@ describe("hyperlink", () => {
     // …but the table's border lines size to the visible content,
     // not the escape-laden byte length. Pre-fix, the bottom border
     // would have been hundreds of `─` wide; with proper width
-    // measurement it's just wide enough for "Values" (6 chars) +
+    // measurement it's just wide enough for "Value" (6 chars) +
     // padding + the 3-char "url" key column.
     const borderLine = out.split("\n")[0]!
     // "┌───┬──────┐" shape — but actual widths depend on padding.

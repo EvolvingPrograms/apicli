@@ -29,14 +29,14 @@ describe("prettyFormat", () => {
 
   test("array of primitives → single-column table with index", () => {
     const out = prettyFormat([0.1, -0.1, 0.05])
-    expect(out).toContain("Values")
+    expect(out).toContain("Value")
     expect(out).toContain("0.1")
     expect(out).toContain("-0.1")
   })
 
   test("flat object → vertical key/value table", () => {
     const out = prettyFormat({ id: "GDP", frequency: "Quarterly" })
-    expect(out).toContain("Values")
+    expect(out).toContain("Value")
     expect(out).toContain("GDP")
     expect(out).toContain("Quarterly")
   })

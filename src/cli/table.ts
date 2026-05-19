@@ -44,11 +44,17 @@ const BOX = {
 
 const ANSI = {
   reset: "\x1b[0m",
+  bold: "\x1b[1m",
   dim: "\x1b[2m",
   yellow: "\x1b[33m",
   cyan: "\x1b[36m",
   magenta: "\x1b[35m",
   gray: "\x1b[90m",
+}
+
+function bold(s: string): string {
+  if (!colorEnabled() || s === "") return s
+  return ANSI.bold + s + ANSI.reset
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.+\-Z]+)?$/
@@ -107,13 +113,15 @@ function render(headers: string[], rows: string[][]): string {
   const widths = columnWidths(headers, rows)
   // Column 0 in every renderer is the "leftmost label" — auto-index
   // in `renderArrayTable`, key in `renderObjectTable`, outer key in
-  // `renderMapTable`. Skip color there; type-color every other column.
-  const colored = rows.map((r) =>
-    r.map((cell, ci) => (ci === 0 ? cell : colorize(cell))),
+  // `renderMapTable`. Bold it (it's a label, not a value). Type-color
+  // every other column; never type-color the label column.
+  const styledHeaders = headers.map(bold)
+  const styledRows = rows.map((r) =>
+    r.map((cell, ci) => (ci === 0 ? bold(cell) : colorize(cell))),
   )
-  const lines = [rule(widths, "top"), row(headers, widths), rule(widths, "mid")]
-  for (let i = 0; i < colored.length; i++) {
-    lines.push(row(colored[i]!, widths))
+  const lines = [rule(widths, "top"), row(styledHeaders, widths), rule(widths, "mid")]
+  for (let i = 0; i < styledRows.length; i++) {
+    lines.push(row(styledRows[i]!, widths))
   }
 
   lines.push(rule(widths, "bot"))
@@ -134,7 +142,7 @@ function cellString(v: unknown): string {
 export function renderObjectTable(obj: Record<string, unknown>): string {
   const entries = Object.entries(obj)
   return render(
-    ["", "Values"],
+    ["", "Value"],
     entries.map(([k, v]) => [k, cellString(v)]),
   )
 }
@@ -147,10 +155,10 @@ export function renderObjectTable(obj: Record<string, unknown>): string {
 export function renderArrayTable(arr: unknown[]): string {
   if (arr.length === 0) return render([""], [])
 
-  // Primitives + non-objects fall back to single-column "Values".
+  // Primitives + non-objects fall back to single-column "Value".
   if (arr.every((item) => item === null || typeof item !== "object")) {
     return render(
-      ["", "Values"],
+      ["", "Value"],
       arr.map((v, i) => [String(i), cellString(v)]),
     )
   }

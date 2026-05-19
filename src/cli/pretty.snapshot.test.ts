@@ -37,7 +37,11 @@ async function render(value: unknown): Promise<string> {
   const proc = Bun.spawn(["bun", "-e", script], {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+    // Match the in-process test setup (FORCE_COLOR=1) so snapshots
+    // include the ANSI bytes — bold headers, type-colored cells. The
+    // color is part of the contract; pinning it in snapshots makes
+    // regressions in coloring visible in the diff.
+    env: { ...process.env, FORCE_COLOR: "1", NO_COLOR: undefined },
   })
 
   const [stdout, stderr] = await Promise.all([
