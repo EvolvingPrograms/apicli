@@ -3,11 +3,12 @@
  *
  * Two output modes:
  *
- *   - **pretty** (default): `console.table(value)` — Node/Bun's
- *     built-in renderer. Auto-promotes one level of nested object
- *     keys into sibling columns; deeper nesting falls back to
+ *   - **pretty** (default): shape-aware rendering via
+ *     [`prettyPrint`](./pretty.ts). Picks the best fit per piece —
+ *     flat arrays go through `console.table`, mixed objects get a
+ *     header + per-section table, deeply nested leaves drop to
  *     `util.inspect`. Good for humans *and* agents — Claude reads
- *     tables more reliably than JSON.
+ *     tables more reliably than raw JSON.
  *
  *   - **json**: `JSON.stringify(value) + "\n"` — for pipes, scripts,
  *     or anything that wants the raw shape.
@@ -27,6 +28,8 @@
  */
 
 import { z } from "zod"
+
+import { prettyPrint } from "./pretty"
 
 export type EmitMode = "pretty" | "json"
 
@@ -68,7 +71,8 @@ export function emit(value: unknown, opts: EmitOptions = {}): void {
     process.stdout.write(JSON.stringify(value) + "\n")
     return
   }
-  console.table(value)
+
+  prettyPrint(value)
 }
 
 export function mapError(
