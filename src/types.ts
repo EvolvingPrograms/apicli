@@ -276,7 +276,7 @@ export interface CreateCliOptions {
   /** API client from `defineApi`. If provided, exposes `api <endpoint>`. */
   api?: StoredApi
   /** Error class. Thrown instances get mapped to `name: <msg>` + exit 1. */
-  errorClass?: new (msg: string) => Error
+  errorClass?: new (...args: never[]) => Error
   /**
    * Pass-through configuration applied to the underlying
    * Commander program. Each field maps to a Commander setter

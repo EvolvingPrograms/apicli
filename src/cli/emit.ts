@@ -78,7 +78,7 @@ export function emit(value: unknown, opts: EmitOptions = {}): void {
 export function mapError(
   err: unknown,
   name: string,
-  errorClass?: new (msg: string) => Error,
+  errorClass?: new (...args: never[]) => Error,
 ): never {
   if (errorClass && err instanceof errorClass) {
     process.stderr.write(`${name}: ${err.message}\n`)

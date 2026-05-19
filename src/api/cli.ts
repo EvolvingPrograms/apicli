@@ -37,7 +37,7 @@ export interface AddApiCliOptions {
   /** Prefix used in error output. Defaults to `api.__spec.name`. */
   errorName?: string
   /** Mapped to `<name>: <msg>` + exit 1. Other errors fall through generically. */
-  errorClass?: new (msg: string) => Error
+  errorClass?: new (...args: never[]) => Error
 }
 
 export function addApiCli(
@@ -66,7 +66,7 @@ export function addApiCli(
 
 interface ErrOpts {
   errorName: string
-  errorClass?: new (msg: string) => Error
+  errorClass?: new (...args: never[]) => Error
 }
 
 function registerEndpoint(
